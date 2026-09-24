@@ -1,0 +1,61 @@
+{
+  "name": "inventory-platform",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "setup:env": "node scripts/setup.mjs env",
+    "setup:project": "node scripts/setup.mjs",
+
+    "infra:up": "docker compose up -d postgres redis",
+    "infra:down": "docker compose stop postgres redis",
+    "infra:logs": "docker compose logs -f postgres redis",
+
+    "db:generate": "pnpm --filter @inventory/database generate",
+    "db:migrate": "pnpm --filter @inventory/database migrate:dev",
+    "db:deploy": "pnpm --filter @inventory/database migrate:deploy",
+    "db:seed": "pnpm --filter @inventory/database seed",
+    "db:studio": "pnpm --filter @inventory/database studio",
+    "db:reset": "pnpm --filter @inventory/database migrate:reset",
+    "db:setup": "pnpm db:generate && pnpm db:deploy && pnpm db:seed",
+
+    "dev": "turbo run dev --filter=@inventory/shared --filter=@inventory/api --filter=@inventory/web",
+    "dev:api": "pnpm --filter @inventory/api dev",
+    "dev:web": "pnpm --filter @inventory/web dev",
+
+    "build": "turbo run build --filter=@inventory/shared --filter=@inventory/database --filter=@inventory/api --filter=@inventory/web",
+    "build:shared": "pnpm --filter @inventory/shared build",
+    "build:api": "pnpm --filter @inventory/api build",
+    "build:web": "pnpm --filter @inventory/web build",
+
+    "start:api": "pnpm --filter @inventory/api start:prod",
+    "start:web": "pnpm --filter @inventory/web start",
+
+    "typecheck": "turbo run typecheck --filter=@inventory/shared --filter=@inventory/database --filter=@inventory/api --filter=@inventory/web",
+    "check": "node scripts/check.mjs",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
+
+    "docker:up": "docker compose up -d --build",
+    "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose -f docker-compose.prod.yml logs -f",
+    "docker:prod:seed": "docker compose -f docker-compose.prod.yml exec api pnpm --filter @inventory/database seed",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:seed": "docker compose exec api pnpm --filter @inventory/database seed",
+    "test:db": "pnpm --filter @inventory/api test:db",
+
+    "bootstrap": "pnpm setup && pnpm infra:up && pnpm db:setup",
+    "win:path": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/win.ps1 path",
+    "win:bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/win.ps1 bootstrap",
+    "win:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/win.ps1 dev",
+    "win:native": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/native-windows.ps1"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

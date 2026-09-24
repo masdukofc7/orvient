@@ -1,0 +1,165 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { MembershipRole, Prisma } from '@inventory/database';
+import * as argon2 from 'argon2';
+import type { CreateOrgUserInput, UpdateOrgUserInput } from '@inventory/shared';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditService } from '../../../common/services/audit.service';
+
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
+
+  async list(orgId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId: orgId },
+      include: {
+        user: { select: { id: true, email: true, name: true, isActive: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }],
+    });
+    return memberships.map((m) => ({
+      membershipId: m.id,
+      userId: m.user.id,
+      email: m.user.email,
+      name: m.user.name,
+      isActive: m.user.isActive,
+      membershipRole: m.role,
+    }));
+  }
+
+  async create(orgId: string, actorId: string, input: CreateOrgUserInput) {
+    const email = input.email.toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const already = await this.prisma.membership.findUnique({
+        where: {
+          userId_organizationId: { userId: existing.id, organizationId: orgId },
+        },
+      });
+      if (already) throw new ConflictException('User already in this organization');
+      throw new ConflictException('Email already registered');
+    }
+
+    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+    const role = input.membershipRole as MembershipRole;
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email,
+            name: input.name,
+            passwordHash,
+            isActive: true,
+          },
+        });
+        const membership = await tx.membership.create({
+          data: {
+            userId: user.id,
+            organizationId: orgId,
+            role,
+          },
+        });
+        return { user, membership };
+      });
+
+      await this.audit.log({
+        organizationId: orgId,
+        userId: actorId,
+        action: 'user.create',
+        entityType: 'User',
+        entityId: result.user.id,
+        after: { email, membershipRole: role },
+      });
+
+      return {
+        membershipId: result.membership.id,
+        userId: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        isActive: result.user.isActive,
+        membershipRole: result.membership.role,
+      };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('Email already registered');
+      }
+      throw e;
+    }
+  }
+
+  async update(orgId: string, actorId: string, userId: string, input: UpdateOrgUserInput) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId: orgId } },
+      include: { user: true },
+    });
+    if (!membership) throw new NotFoundException('User not found in organization');
+
+    if (input.membershipRole && input.membershipRole !== 'OWNER' && membership.role === 'OWNER') {
+      const owners = await this.prisma.membership.count({
+        where: { organizationId: orgId, role: 'OWNER' },
+      });
+      if (owners <= 1) {
+        throw new BadRequestException('Cannot demote the last owner');
+      }
+    }
+
+    if (input.isActive === false && membership.role === 'OWNER') {
+      const owners = await this.prisma.membership.count({
+        where: { organizationId: orgId, role: 'OWNER', user: { isActive: true } },
+      });
+      if (owners <= 1) {
+        throw new BadRequestException('Cannot deactivate the last owner');
+      }
+    }
+
+    const updatedUser = await this.prisma.$transaction(async (tx) => {
+      if (input.membershipRole) {
+        await tx.membership.update({
+          where: { id: membership.id },
+          data: { role: input.membershipRole as MembershipRole },
+        });
+      }
+      if (input.isActive !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { isActive: input.isActive },
+        });
+      }
+      return tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        include: {
+          memberships: { where: { organizationId: orgId }, take: 1 },
+        },
+      });
+    });
+
+    const role = updatedUser.memberships[0]?.role ?? membership.role;
+    await this.audit.log({
+      organizationId: orgId,
+      userId: actorId,
+      action: 'user.update',
+      entityType: 'User',
+      entityId: userId,
+      before: { membershipRole: membership.role, isActive: membership.user.isActive },
+      after: { membershipRole: role, isActive: updatedUser.isActive },
+    });
+
+    return {
+      membershipId: membership.id,
+      userId: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      isActive: updatedUser.isActive,
+      membershipRole: role,
+    };
+  }
+}

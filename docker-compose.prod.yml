@@ -1,0 +1,90 @@
+# Production stack: DB/Redis not published; Caddy terminates TLS.
+# Usage:
+#   set DOMAIN, CORS_ORIGIN, JWT_ACCESS_SECRET, POSTGRES_PASSWORD, NEXT_PUBLIC_API_URL in .env
+#   pnpm docker:prod
+#
+# NEXT_PUBLIC_API_URL must be the browser URL, e.g. https://$DOMAIN/api/v1
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-inventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-inventory}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-inventory}?schema=public
+      REDIS_URL: redis://redis:6379
+      REDIS_DISABLED: "false"
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN e.g. https://your.domain}
+      COOKIE_SECURE: "true"
+      API_PORT: 4000
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET (min 32 chars, not a placeholder) in .env}
+    expose:
+      - "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "pnpm --filter @inventory/database migrate:deploy && pnpm --filter @inventory/api start:prod"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL e.g. https://your.domain/api/v1}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN e.g. app.example.com}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

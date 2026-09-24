@@ -1,0 +1,18 @@
+# Optional TLS terminator for production (Caddy).
+# Point DNS at this host, set DOMAIN, and put this in front of compose web/api.
+#
+#   caddy run --config docker/Caddyfile
+#
+# Or add a `caddy` service that mounts this file and joins the compose network.
+
+{$DOMAIN:localhost} {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

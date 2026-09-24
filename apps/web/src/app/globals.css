@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: 0 0% 99%;
+  --foreground: 240 10% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 4%;
+  --muted: 240 5% 96%;
+  --muted-foreground: 240 4% 46%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 240 5% 26%;
+  --primary: 240 6% 10%;
+  --primary-foreground: 0 0% 98%;
+  --accent: 240 5% 96%;
+  --accent-foreground: 240 6% 10%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --radius: 0.625rem;
+  --brand: 240 6% 10%;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --card: 240 6% 6%;
+  --card-foreground: 0 0% 98%;
+  --muted: 240 4% 12%;
+  --muted-foreground: 240 5% 64%;
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
+  --ring: 240 5% 64%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 6% 10%;
+  --accent: 240 4% 12%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62% 45%;
+  --destructive-foreground: 0 0% 98%;
+  --brand: 0 0% 98%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+  overflow-x: clip;
+}
+
+/* Hide scrollbar, keep scroll — use on sidebars / chips / small panels only. */
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Native option menus follow theme; closed controls use explicit foreground colors */
+select option,
+select optgroup {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* Browser still controls its own headers/footers; users should disable
+     “Headers and footers” in the print dialog for clean receipts. */
+  @page {
+    margin: 8mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+
+  /* Force light ink so dark-mode text is not white-on-white paper */
+  :root,
+  .dark {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 35%;
+    --border: 0 0% 80%;
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  [data-print='thermal'] {
+    width: 80mm;
+    max-width: 100%;
+    font-size: 12px;
+    font-family: ui-monospace, monospace;
+    color: black !important;
+  }
+
+  [data-print='a4'] {
+    width: 100%;
+    max-width: 190mm;
+    margin-inline: auto;
+    font-size: 11pt;
+    color: black !important;
+  }
+
+  [data-print='a4'] table {
+    min-width: 0 !important;
+  }
+}
