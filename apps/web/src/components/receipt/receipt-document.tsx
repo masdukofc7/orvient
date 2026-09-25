@@ -11,6 +11,7 @@ export type ReceiptItem = {
   id: string;
   name: string;
   quantity: string;
+  quantityReturned?: string | number;
   unitPrice: string;
   lineTotal: string;
 };

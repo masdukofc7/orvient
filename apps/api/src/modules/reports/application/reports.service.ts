@@ -156,6 +156,67 @@ export class ReportsService {
     `;
   }
 
+  /** Accounting export — finalized invoices in range as CSV. */
+  async exportSalesCsv(orgId: string, from?: Date, to?: Date) {
+    const where: Prisma.InvoiceWhereInput = {
+      organizationId: orgId,
+      status: 'FINALIZED',
+      ...(from || to
+        ? {
+            finalizedAt: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          }
+        : {}),
+    };
+    const rows = await this.prisma.invoice.findMany({
+      where,
+      orderBy: { finalizedAt: 'asc' },
+      include: { contact: { select: { name: true } } },
+      take: 10_000,
+    });
+    const escape = (v: string | number | null | undefined) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [
+      'invoiceNumber',
+      'date',
+      'customer',
+      'currency',
+      'subtotal',
+      'discount',
+      'tax',
+      'grandTotal',
+      'paidAmount',
+      'paymentStatus',
+    ];
+    const lines = [
+      header.join(','),
+      ...rows.map((r) =>
+        [
+          escape(r.invoiceNumber),
+          escape(r.finalizedAt?.toISOString().slice(0, 10) ?? ''),
+          escape(r.contact?.name ?? ''),
+          escape(r.currency),
+          Number(r.subtotal),
+          Number(r.discount),
+          Number(r.taxAmount),
+          Number(r.grandTotal),
+          Number(r.paidAmount),
+          escape(r.paymentStatus),
+        ].join(','),
+      ),
+    ];
+    const fromLabel = from?.toISOString().slice(0, 10) ?? 'all';
+    const toLabel = to?.toISOString().slice(0, 10) ?? 'now';
+    return {
+      filename: `sales-${fromLabel}-${toLabel}.csv`,
+      csv: lines.join('\n'),
+    };
+  }
+
   async productHistory(orgId: string, productId: string) {
     return this.prisma.inventoryTransaction.findMany({
       where: { organizationId: orgId, productId },

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolveJwtAccessSecret } from '../modules/auth/infrastructure/jwt-secrets';
-import { cookieSecure, validateProductionEnv } from './validate-env';
+import { cookieSecure, cookieSameSite, validateProductionEnv } from './validate-env';
 
 function selfcheck() {
   const prev = { ...process.env };
@@ -34,6 +34,11 @@ function selfcheck() {
   assert.equal(cookieSecure(), false);
   delete process.env.COOKIE_SECURE;
   assert.equal(cookieSecure(), true);
+
+  delete process.env.COOKIE_SAME_SITE;
+  assert.equal(cookieSameSite(), 'strict');
+  process.env.COOKIE_SAME_SITE = 'lax';
+  assert.equal(cookieSameSite(), 'lax');
 
   Object.assign(process.env, prev);
   console.log('env.selfcheck ok');

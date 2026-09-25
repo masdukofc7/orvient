@@ -16,6 +16,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { DEFAULT_CURRENCY } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { downloadCsv } from '@/lib/csv';
+import { downloadCsv as downloadCsvText } from '@/lib/utils';
 
 type LowStockRow = {
   id: string;
@@ -146,6 +147,21 @@ export default function ReportsPage() {
         description="Trends, low stock, and business performance"
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const res = await api<{ filename: string; csv: string }>(
+                    `/reports/export/sales?from=${from}T00:00:00.000Z&to=${to}T23:59:59.999Z`,
+                  );
+                  downloadCsvText(res.filename, res.csv);
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+            >
+              Export invoices CSV
+            </Button>
             <Button
               variant="outline"
               disabled={!sales.data?.byDay?.length}

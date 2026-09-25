@@ -16,14 +16,20 @@ import { InventoryService } from './inventory.service';
 import { AuditService } from '../../common/services/audit.service';
 import type { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import type { RedisService } from '../../infrastructure/redis/redis.service';
+import type { EmailService } from '../../infrastructure/email/email.module';
 
 async function selfcheck() {
   const prisma = new PrismaClient() as unknown as PrismaService;
   const suffix = randomBytes(3).toString('hex');
   const hash = await argon2.hash('Selfcheck1!', { type: argon2.argon2id });
-  const redis = { del: async () => 1 } as unknown as RedisService;
+  const redis = {
+    del: async () => 1,
+    get: async () => null,
+    set: async () => undefined,
+  } as unknown as RedisService;
   const audit = new AuditService(prisma);
-  const inventory = new InventoryService(prisma, redis, audit);
+  const email = { sendLowStock: async () => ({ id: 'dry' }) } as unknown as EmailService;
+  const inventory = new InventoryService(prisma, redis, audit, email);
 
   const user = await prisma.user.create({
     data: { email: `inv-${suffix}@orvient.test`, name: 'Inv', passwordHash: hash },

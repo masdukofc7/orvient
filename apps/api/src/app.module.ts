@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { EmailModule } from './infrastructure/email/email.module';
 import { AuditModule } from './common/services/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProductsModule } from './modules/products/products.module';
@@ -41,6 +42,7 @@ import { SubscriptionGuard } from './common/guards/subscription.guard';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     RedisModule,
+    EmailModule,
     AuditModule,
     AuthModule,
     ProductsModule,

@@ -131,6 +131,14 @@ export default function LoginPage() {
                     required
                   />
                 </FormField>
+                <p className="text-right text-sm">
+                  <Link
+                    href="/forgot-password"
+                    className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    Forgot password?
+                  </Link>
+                </p>
                 <Button className="w-full" loading={loading}>
                   {loading ? 'Signing in…' : 'Continue'}
                 </Button>

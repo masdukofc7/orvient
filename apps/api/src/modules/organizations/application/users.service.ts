@@ -4,18 +4,31 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MembershipRole, Prisma } from '@inventory/database';
+import { AuthTokenType, MembershipRole, Prisma } from '@inventory/database';
 import * as argon2 from 'argon2';
-import type { CreateOrgUserInput, UpdateOrgUserInput } from '@inventory/shared';
+import { createHash, randomBytes } from 'crypto';
+import type {
+  CreateOrgUserInput,
+  InviteOrgUserInput,
+  UpdateOrgUserInput,
+} from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
+import { BillingService } from '../../billing/application/billing.service';
+import { EmailService } from '../../../infrastructure/email/email.module';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly billing: BillingService,
+    private readonly email: EmailService,
   ) {}
+
+  private hashToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
 
   async list(orgId: string) {
     const memberships = await this.prisma.membership.findMany({
@@ -36,6 +49,7 @@ export class UsersService {
   }
 
   async create(orgId: string, actorId: string, input: CreateOrgUserInput) {
+    await this.billing.assertPlanSeat(orgId, 'user');
     const email = input.email.toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -94,6 +108,78 @@ export class UsersService {
       }
       throw e;
     }
+  }
+
+  /** Email invite — user sets password via accept-invite link. */
+  async invite(orgId: string, actorId: string, input: InviteOrgUserInput) {
+    await this.billing.assertPlanSeat(orgId, 'user');
+    const email = input.email.toLowerCase();
+    const org = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const already = await this.prisma.membership.findUnique({
+        where: {
+          userId_organizationId: { userId: existing.id, organizationId: orgId },
+        },
+      });
+      if (already) throw new ConflictException('User already in this organization');
+      throw new ConflictException('Email already registered — ask them to sign in');
+    }
+
+    const role = input.membershipRole as MembershipRole;
+    const placeholder = await argon2.hash(randomBytes(32).toString('hex'), {
+      type: argon2.argon2id,
+    });
+    const raw = randomBytes(32).toString('base64url');
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          name: input.name,
+          passwordHash: placeholder,
+          isActive: false,
+        },
+      });
+      const membership = await tx.membership.create({
+        data: { userId: user.id, organizationId: orgId, role },
+      });
+      await tx.authToken.create({
+        data: {
+          type: AuthTokenType.INVITE,
+          tokenHash: this.hashToken(raw),
+          email,
+          userId: user.id,
+          organizationId: orgId,
+          membershipRole: role,
+          expiresAt: new Date(Date.now() + 7 * 86_400_000),
+        },
+      });
+      return { user, membership };
+    });
+
+    await this.email.sendInvite(email, org.name, raw);
+    await this.audit.log({
+      organizationId: orgId,
+      userId: actorId,
+      action: 'user.invite',
+      entityType: 'User',
+      entityId: result.user.id,
+      after: { email, membershipRole: role },
+    });
+
+    return {
+      membershipId: result.membership.id,
+      userId: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      isActive: result.user.isActive,
+      membershipRole: result.membership.role,
+      invited: true,
+    };
   }
 
   async update(orgId: string, actorId: string, userId: string, input: UpdateOrgUserInput) {

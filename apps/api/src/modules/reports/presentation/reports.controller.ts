@@ -34,6 +34,14 @@ export class ReportsController {
     return this.reports.lowStock(user.organizationId);
   }
 
+  @Get('export/sales')
+  exportSales(
+    @CurrentUser() user: AuthUser,
+    @Query(new ZodValidationPipe(reportRangeSchema)) query: { from?: Date; to?: Date },
+  ) {
+    return this.reports.exportSalesCsv(user.organizationId, query.from, query.to);
+  }
+
   @Get('products/:productId/history')
   productHistory(@CurrentUser() user: AuthUser, @Param('productId') productId: string) {
     return this.reports.productHistory(user.organizationId, productId);

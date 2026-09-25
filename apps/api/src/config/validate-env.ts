@@ -28,3 +28,12 @@ export function cookieSecure(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.COOKIE_SECURE === 'false') return false;
   return env.NODE_ENV === 'production';
 }
+
+/** Prefer `strict` when web+API share one origin (Caddy). Use `lax` for split hosts. */
+export function cookieSameSite(
+  env: NodeJS.ProcessEnv = process.env,
+): 'strict' | 'lax' | 'none' {
+  const v = (env.COOKIE_SAME_SITE ?? '').toLowerCase();
+  if (v === 'strict' || v === 'lax' || v === 'none') return v;
+  return env.NODE_ENV === 'production' ? 'strict' : 'lax';
+}

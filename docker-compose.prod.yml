@@ -42,6 +42,7 @@ services:
       REDIS_DISABLED: "false"
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN e.g. https://your.domain}
       COOKIE_SECURE: "true"
+      COOKIE_SAME_SITE: strict
       API_PORT: 4000
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET (min 32 chars, not a placeholder) in .env}
     expose:

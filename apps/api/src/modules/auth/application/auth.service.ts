@@ -5,6 +5,8 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +19,7 @@ import {
   PlatformRole,
   BillingCycle,
   SubscriptionStatus,
+  AuthTokenType,
 } from '@inventory/database';
 import type {
   AuthMembershipOption,
@@ -25,10 +28,19 @@ import type {
   SessionUser,
   SignupInput,
   SwitchOrgInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+  AcceptInviteInput,
 } from '@inventory/shared';
 import { TRIAL_DAYS } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
+import { EmailService } from '../../../infrastructure/email/email.module';
+import { RedisService } from '../../../infrastructure/redis/redis.service';
+
+const LOCK_TTL_SEC = 15 * 60;
+const LOCK_MAX_EMAIL = 8;
+const LOCK_MAX_IP = 30;
 
 type MembershipOrg = {
   id: string;
@@ -50,10 +62,41 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly email: EmailService,
+    private readonly redis: RedisService,
   ) {}
 
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private async assertAuthUnlocked(email: string, ip?: string) {
+    const e = await this.redis.get(`auth:fail:email:${email}`);
+    if (e && Number(e) >= LOCK_MAX_EMAIL) {
+      throw new HttpException(
+        'Too many attempts — try again in 15 minutes',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (ip) {
+      const i = await this.redis.get(`auth:fail:ip:${ip}`);
+      if (i && Number(i) >= LOCK_MAX_IP) {
+        throw new HttpException(
+          'Too many attempts — try again in 15 minutes',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+  }
+
+  private async recordAuthFail(email: string, ip?: string) {
+    await this.redis.incr(`auth:fail:email:${email}`, LOCK_TTL_SEC);
+    if (ip) await this.redis.incr(`auth:fail:ip:${ip}`, LOCK_TTL_SEC);
+  }
+
+  private async clearAuthFails(email: string, ip?: string) {
+    await this.redis.del(`auth:fail:email:${email}`);
+    if (ip) await this.redis.del(`auth:fail:ip:${ip}`);
   }
 
   private parseDurationMs(value: string, fallbackMs: number) {
@@ -284,8 +327,11 @@ export class AuthService {
     input: LoginInput,
     meta?: { ip?: string; userAgent?: string },
   ): Promise<{ accessToken: string; refreshToken: string; user: SessionUser } | LoginOrgChoice> {
+    const email = input.email.toLowerCase();
+    await this.assertAuthUnlocked(email, meta?.ip);
+
     const user = await this.prisma.user.findUnique({
-      where: { email: input.email.toLowerCase() },
+      where: { email },
       include: {
         memberships: {
           include: { organization: true },
@@ -295,13 +341,17 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
+      await this.recordAuthFail(email, meta?.ip);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
+      await this.recordAuthFail(email, meta?.ip);
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    await this.clearAuthFails(email, meta?.ip);
 
     const active = user.memberships.filter(
       (m) => m.organization.status === OrganizationStatus.ACTIVE,
@@ -539,5 +589,77 @@ export class AuthService {
       },
       branchId,
     );
+  }
+
+  /** Always 200 — do not reveal whether the email exists. */
+  async forgotPassword(input: ForgotPasswordInput, meta?: { ip?: string }) {
+    const email = input.email.toLowerCase();
+    await this.assertAuthUnlocked(`forgot:${email}`, meta?.ip);
+    await this.recordAuthFail(`forgot:${email}`, meta?.ip);
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user?.isActive) return { ok: true };
+
+    const raw = randomBytes(32).toString('base64url');
+    const tokenHash = this.hashToken(raw);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await this.prisma.authToken.create({
+      data: {
+        type: AuthTokenType.PASSWORD_RESET,
+        tokenHash,
+        email,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+    await this.email.sendPasswordReset(email, raw);
+    return { ok: true };
+  }
+
+  async resetPassword(input: ResetPasswordInput) {
+    const tokenHash = this.hashToken(input.token);
+    const row = await this.prisma.authToken.findUnique({ where: { tokenHash } });
+    if (
+      !row ||
+      row.type !== AuthTokenType.PASSWORD_RESET ||
+      row.usedAt ||
+      row.expiresAt < new Date() ||
+      !row.userId
+    ) {
+      throw new BadRequestException('Invalid or expired reset link');
+    }
+    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: row.userId }, data: { passwordHash } }),
+      this.prisma.authToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  async acceptInvite(input: AcceptInviteInput) {
+    const tokenHash = this.hashToken(input.token);
+    const row = await this.prisma.authToken.findUnique({ where: { tokenHash } });
+    if (
+      !row ||
+      row.type !== AuthTokenType.INVITE ||
+      row.usedAt ||
+      row.expiresAt < new Date() ||
+      !row.userId
+    ) {
+      throw new BadRequestException('Invalid or expired invite');
+    }
+    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash, isActive: true },
+      }),
+      this.prisma.authToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
+    ]);
+    return { ok: true, email: row.email };
   }
 }

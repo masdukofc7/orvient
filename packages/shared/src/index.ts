@@ -13,7 +13,7 @@ export const quantitySchema = z.coerce.number().finite();
 
 export const paginationQuerySchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
   search: z.string().trim().optional(),
 });
 
@@ -498,6 +498,43 @@ export const updateOrgUserSchema = z.object({
 });
 
 export type UpdateOrgUserInput = z.infer<typeof updateOrgUserSchema>;
+
+export const inviteOrgUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().trim().min(1).max(120),
+  membershipRole: z.enum(['ADMIN', 'MANAGER', 'CASHIER']),
+});
+export type InviteOrgUserInput = z.infer<typeof inviteOrgUserSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8).max(128),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8).max(128),
+});
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
+
+export const returnInvoiceLinesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().min(1),
+        quantity: z.coerce.number().positive(),
+      }),
+    )
+    .min(1)
+    .optional(),
+});
+export type ReturnInvoiceLinesInput = z.infer<typeof returnInvoiceLinesSchema>;
 
 export function calcLineTotal(item: {
   quantity: number;

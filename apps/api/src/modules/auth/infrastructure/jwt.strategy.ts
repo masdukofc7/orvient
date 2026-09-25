@@ -6,6 +6,7 @@ import type { Request } from 'express';
 import { OrganizationStatus, PlatformRole } from '@inventory/database';
 import type { JwtAuthUser } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { resolveJwtAccessSecret } from './jwt-secrets';
 
 type JwtPayload = {
@@ -21,11 +22,14 @@ function cookieExtractor(req: Request): string | null {
   return typeof token === 'string' && token.length ? token : null;
 }
 
+const CACHE_TTL_SEC = 45;
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
@@ -38,16 +42,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  // ponytail: one user + org read per request so suspend/deactivate/demote apply before the access token expires.
+  // ponytail: Redis cache 45s; bump TTL or drop if suspend must be instant.
   async validate(req: Request, payload: JwtPayload): Promise<JwtAuthUser> {
+    const path = req.originalUrl || req.url || '';
+    const skipOrg = path.includes('/platform');
+    const cacheKey = `jwt:v1:${payload.sub}:${payload.organizationId}:${skipOrg ? 1 : 0}`;
+
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as JwtAuthUser;
+      } catch {
+        /* fall through */
+      }
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: { isActive: true, platformRole: true, email: true },
     });
     if (!user?.isActive) throw new UnauthorizedException('User inactive');
 
-    const path = req.originalUrl || req.url || '';
-    if (!path.includes('/platform')) {
+    if (!skipOrg) {
       const org = await this.prisma.organization.findUnique({
         where: { id: payload.organizationId },
         select: { status: true },
@@ -57,7 +73,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    return {
+    const authUser: JwtAuthUser = {
       userId: payload.sub,
       email: user.email,
       organizationId: payload.organizationId,
@@ -66,5 +82,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       platformRole: user.platformRole,
       isPlatformAdmin: user.platformRole !== PlatformRole.NONE,
     };
+
+    await this.redis.set(cacheKey, JSON.stringify(authUser), CACHE_TTL_SEC);
+    return authUser;
   }
 }

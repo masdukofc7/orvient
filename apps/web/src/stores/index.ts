@@ -17,6 +17,18 @@ export type PosLine = {
   stock?: number;
 };
 
+export type PosHeldCart = {
+  id: string;
+  label: string;
+  lines: PosLine[];
+  contactId: string | null;
+  contactName: string | null;
+  discount: number;
+  taxRate: number;
+  notes: string;
+  heldAt: number;
+};
+
 type PosState = {
   lines: PosLine[];
   contactId: string | null;
@@ -24,6 +36,7 @@ type PosState = {
   discount: number;
   taxRate: number;
   notes: string;
+  held: PosHeldCart[];
   addOrIncrement: (line: Omit<PosLine, 'key' | 'quantity'> & { quantity?: number }) => void;
   setQuantity: (key: string, quantity: number) => void;
   removeLine: (key: string) => void;
@@ -32,6 +45,9 @@ type PosState = {
   setTaxRate: (n: number) => void;
   setNotes: (n: string) => void;
   clear: () => void;
+  holdCart: (label?: string) => void;
+  resumeHeld: (id: string) => void;
+  discardHeld: (id: string) => void;
 };
 
 export const usePosStore = create<PosState>()(
@@ -43,6 +59,7 @@ export const usePosStore = create<PosState>()(
       discount: 0,
       taxRate: 0,
       notes: '',
+      held: [],
       addOrIncrement: (line) => {
         const existing = get().lines.find((l) => l.productId === line.productId);
         if (existing) {
@@ -92,6 +109,47 @@ export const usePosStore = create<PosState>()(
           taxRate: 0,
           notes: '',
         }),
+      holdCart: (label) => {
+        const s = get();
+        if (!s.lines.length) return;
+        const id = `hold-${Date.now()}`;
+        set({
+          held: [
+            {
+              id,
+              label: label?.trim() || s.contactName || `Hold ${s.held.length + 1}`,
+              lines: s.lines,
+              contactId: s.contactId,
+              contactName: s.contactName,
+              discount: s.discount,
+              taxRate: s.taxRate,
+              notes: s.notes,
+              heldAt: Date.now(),
+            },
+            ...s.held,
+          ].slice(0, 20),
+          lines: [],
+          contactId: null,
+          contactName: null,
+          discount: 0,
+          taxRate: 0,
+          notes: '',
+        });
+      },
+      resumeHeld: (id) => {
+        const cart = get().held.find((h) => h.id === id);
+        if (!cart) return;
+        set({
+          lines: cart.lines,
+          contactId: cart.contactId,
+          contactName: cart.contactName,
+          discount: cart.discount,
+          taxRate: cart.taxRate,
+          notes: cart.notes,
+          held: get().held.filter((h) => h.id !== id),
+        });
+      },
+      discardHeld: (id) => set({ held: get().held.filter((h) => h.id !== id) }),
     }),
     { name: 'pos-draft' },
   ),

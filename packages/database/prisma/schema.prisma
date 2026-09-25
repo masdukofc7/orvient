@@ -219,6 +219,7 @@ model Membership {
 
   @@unique([userId, organizationId])
   @@index([organizationId])
+  @@index([organizationId, role])
   @@map("memberships")
 }
 
@@ -237,6 +238,28 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+enum AuthTokenType {
+  PASSWORD_RESET
+  INVITE
+}
+
+model AuthToken {
+  id             String        @id @default(cuid())
+  type           AuthTokenType
+  tokenHash      String        @unique
+  email          String
+  userId         String?
+  organizationId String?
+  membershipRole MembershipRole?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([email, type])
+  @@index([expiresAt])
+  @@map("auth_tokens")
 }
 
 model Product {
@@ -274,6 +297,7 @@ model Product {
   @@index([organizationId, status])
   @@index([organizationId, deletedAt])
   @@index([organizationId, category])
+  @@index([organizationId, updatedAt])
   @@map("products")
 }
 
@@ -369,24 +393,26 @@ model Invoice {
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([organizationId, status])
   @@index([organizationId, contactId])
+  @@index([organizationId, finalizedAt])
   @@map("invoices")
 }
 
 model InvoiceItem {
-  id            String  @id @default(cuid())
-  invoiceId     String
-  productId     String?
-  name          String
-  sku           String?
-  barcode       String?
-  quantity      Decimal @db.Decimal(19, 4)
-  unitPrice     Decimal @db.Decimal(19, 4)
-  costPrice     Decimal @default(0) @db.Decimal(19, 4)
-  discount      Decimal @default(0) @db.Decimal(19, 4)
-  taxRate       Decimal @default(0) @db.Decimal(8, 4)
-  taxAmount     Decimal @default(0) @db.Decimal(19, 4)
-  lineTotal     Decimal @db.Decimal(19, 4)
-  sortOrder     Int     @default(0)
+  id               String  @id @default(cuid())
+  invoiceId        String
+  productId        String?
+  name             String
+  sku              String?
+  barcode          String?
+  quantity         Decimal @db.Decimal(19, 4)
+  quantityReturned Decimal @default(0) @db.Decimal(19, 4)
+  unitPrice        Decimal @db.Decimal(19, 4)
+  costPrice        Decimal @default(0) @db.Decimal(19, 4)
+  discount         Decimal @default(0) @db.Decimal(19, 4)
+  taxRate          Decimal @default(0) @db.Decimal(8, 4)
+  taxAmount        Decimal @default(0) @db.Decimal(19, 4)
+  lineTotal        Decimal @db.Decimal(19, 4)
+  sortOrder        Int     @default(0)
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -506,6 +532,10 @@ model Plan {
   priceYearly          Decimal  @db.Decimal(19, 2)
   currency             String   @default("USD") @db.Char(3)
   features             Json     @default("[]")
+  /** 0 = unlimited */
+  maxUsers             Int      @default(3)
+  /** 0 = unlimited */
+  maxBranches          Int      @default(1)
   dodoProductIdMonthly String?
   dodoProductIdYearly  String?
   isActive             Boolean  @default(true)

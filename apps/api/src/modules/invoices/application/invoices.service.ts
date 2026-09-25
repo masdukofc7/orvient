@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { DocumentSequenceType, Prisma } from '@inventory/database';
 import { CreateInvoiceInput, calcInvoiceTotals, roundMoney, resolveInvoicePayment, applyInvoicePayment } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -236,7 +237,9 @@ export class InvoicesService {
       where: { receiptToken: token },
       include: invoiceDetailInclude,
     });
-    if (!invoice) throw new NotFoundException('Receipt not found');
+    if (!invoice || invoice.status === 'VOID') {
+      throw new NotFoundException('Receipt not found');
+    }
     return invoice;
   }
 
@@ -309,12 +312,18 @@ export class InvoicesService {
         if (!invoice.branchId) {
           throw new BadRequestException('Invoice has no branch — cannot restore stock');
         }
+        const remaining = Number(item.quantity) - Number(item.quantityReturned);
+        if (remaining <= 0) continue;
         await this.inventory.saleVoid(tx, orgId, userId, {
           productId: item.productId,
-          quantity: Number(item.quantity),
+          quantity: remaining,
           invoiceId: invoice.id,
           branchId: invoice.branchId,
           notes: `Void ${invoice.invoiceNumber}`,
+        });
+        await tx.invoiceItem.update({
+          where: { id: item.id },
+          data: { quantityReturned: item.quantity },
         });
       }
 
@@ -325,6 +334,8 @@ export class InvoicesService {
           paymentStatus: 'VOID',
           voidedAt: new Date(),
           updatedById: userId,
+          // Invalidate public receipt links
+          receiptToken: `void_${randomBytes(24).toString('hex')}`,
         },
         include: { items: true, contact: true },
       });
@@ -380,10 +391,88 @@ export class InvoicesService {
   }
 
   /**
-   * Full return: restore stock at the invoice branch and void the sale.
-   * ponytail: partial line returns when customers need them.
+   * Partial or full line returns — restores stock; voids invoice when all lines fully returned.
    */
-  async returnInvoice(orgId: string, userId: string, id: string) {
-    return this.void(orgId, userId, id);
+  async returnInvoice(
+    orgId: string,
+    userId: string,
+    id: string,
+    lines?: Array<{ itemId: string; quantity: number }>,
+  ) {
+    if (!lines?.length) {
+      return this.void(orgId, userId, id);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id, organizationId: orgId },
+        include: { items: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+      if (invoice.status !== 'FINALIZED') {
+        throw new BadRequestException('Only finalized invoices can be returned');
+      }
+      if (!invoice.branchId) {
+        throw new BadRequestException('Invoice has no branch — cannot restore stock');
+      }
+
+      for (const line of lines) {
+        const item = invoice.items.find((i) => i.id === line.itemId);
+        if (!item) throw new BadRequestException(`Line ${line.itemId} not on invoice`);
+        const sold = Number(item.quantity);
+        const already = Number(item.quantityReturned);
+        const remaining = sold - already;
+        if (line.quantity > remaining + 1e-9) {
+          throw new BadRequestException(
+            `Cannot return ${line.quantity} of ${item.name} — only ${remaining} left`,
+          );
+        }
+        if (item.productId) {
+          await this.inventory.saleVoid(tx, orgId, userId, {
+            productId: item.productId,
+            quantity: line.quantity,
+            invoiceId: invoice.id,
+            branchId: invoice.branchId,
+            notes: `Return ${invoice.invoiceNumber}`,
+          });
+        }
+        await tx.invoiceItem.update({
+          where: { id: item.id },
+          data: { quantityReturned: already + line.quantity },
+        });
+      }
+
+      const refreshed = await tx.invoice.findFirstOrThrow({
+        where: { id },
+        include: { items: true, contact: true },
+      });
+      const allReturned = refreshed.items.every(
+        (i) => Number(i.quantityReturned) >= Number(i.quantity) - 1e-9,
+      );
+      if (allReturned) {
+        return tx.invoice.update({
+          where: { id },
+          data: {
+            status: 'VOID',
+            paymentStatus: 'VOID',
+            voidedAt: new Date(),
+            updatedById: userId,
+            receiptToken: `void_${randomBytes(24).toString('hex')}`,
+          },
+          include: { items: true, contact: true },
+        });
+      }
+
+      await this.audit.log({
+        organizationId: orgId,
+        userId,
+        action: 'invoice.return',
+        entityType: 'Invoice',
+        entityId: id,
+        after: { lines },
+      });
+
+      return refreshed;
+    });
   }
 }

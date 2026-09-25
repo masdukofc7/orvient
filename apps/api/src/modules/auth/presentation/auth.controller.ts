@@ -14,16 +14,22 @@ import {
   signupSchema,
   switchOrgSchema,
   switchBranchSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  acceptInviteSchema,
   type LoginInput,
   type SignupInput,
   type SwitchOrgInput,
   type SwitchBranchInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
+  type AcceptInviteInput,
 } from '@inventory/shared';
 import { AuthService } from '../application/auth.service';
 import { Public } from '../../../common/decorators/public.decorator';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
-import { cookieSecure } from '../../../config/validate-env';
+import { cookieSecure, cookieSameSite } from '../../../config/validate-env';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -31,10 +37,11 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   private cookieOpts(maxAge: number) {
+    const sameSite = cookieSameSite();
     return {
       httpOnly: true as const,
-      secure: cookieSecure(),
-      sameSite: 'lax' as const,
+      secure: sameSite === 'none' ? true : cookieSecure(),
+      sameSite,
       maxAge,
     };
   }
@@ -111,6 +118,30 @@ export class AuthController {
       accessToken: result.accessToken,
       user: result.user,
     };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password')
+  forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema)) body: ForgotPasswordInput,
+    @Req() req: Request,
+  ) {
+    return this.auth.forgotPassword(body, { ip: req.ip });
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('reset-password')
+  resetPassword(@Body(new ZodValidationPipe(resetPasswordSchema)) body: ResetPasswordInput) {
+    return this.auth.resetPassword(body);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('accept-invite')
+  acceptInvite(@Body(new ZodValidationPipe(acceptInviteSchema)) body: AcceptInviteInput) {
+    return this.auth.acceptInvite(body);
   }
 
   @ApiBearerAuth()

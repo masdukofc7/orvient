@@ -19,7 +19,6 @@ async function main() {
   const testProduct = process.env.DODO_TEST_PRODUCT_ID?.trim() || null;
 
   // Global USD sweet spot: under Zoho, above commodity, Growth = Zoho Standard with POS bundled.
-  // ponytail: feature bullets are marketing limits until entitlement hard-gates ship
   const starter = await prisma.plan.upsert({
     where: { slug: 'starter' },
     update: {
@@ -32,6 +31,8 @@ async function main() {
       dodoProductIdYearly: testProduct,
       isActive: true,
       sortOrder: 1,
+      maxUsers: 3,
+      maxBranches: 1,
       features: [
         '1 branch',
         'Up to 3 users',
@@ -54,6 +55,8 @@ async function main() {
       dodoProductIdMonthly: testProduct,
       dodoProductIdYearly: testProduct,
       sortOrder: 1,
+      maxUsers: 3,
+      maxBranches: 1,
       features: [
         '1 branch',
         'Up to 3 users',
@@ -79,6 +82,8 @@ async function main() {
       dodoProductIdYearly: testProduct,
       isActive: true,
       sortOrder: 2,
+      maxUsers: 10,
+      maxBranches: 3,
       features: [
         'Up to 3 branches',
         'Up to 10 users',
@@ -101,6 +106,8 @@ async function main() {
       dodoProductIdMonthly: testProduct,
       dodoProductIdYearly: testProduct,
       sortOrder: 2,
+      maxUsers: 10,
+      maxBranches: 3,
       features: [
         'Up to 3 branches',
         'Up to 10 users',
@@ -126,6 +133,8 @@ async function main() {
       dodoProductIdYearly: testProduct,
       isActive: true,
       sortOrder: 3,
+      maxUsers: 25,
+      maxBranches: 0,
       features: [
         'Unlimited branches',
         'Up to 25 users',
@@ -147,6 +156,8 @@ async function main() {
       dodoProductIdMonthly: testProduct,
       dodoProductIdYearly: testProduct,
       sortOrder: 3,
+      maxUsers: 25,
+      maxBranches: 0,
       features: [
         'Unlimited branches',
         'Up to 25 users',

@@ -173,11 +173,11 @@ export default function SettingsPage() {
 
   const invite = useMutation({
     mutationFn: (body: Record<string, string>) =>
-      api<TeamUser>('/users', { method: 'POST', body }),
+      api<TeamUser>('/users/invite', { method: 'POST', body }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       setInviteOpen(false);
-      toast({ title: 'User created' });
+      toast({ title: 'Invite sent', description: 'They’ll get an email to set a password.' });
     },
     onError: (e: Error) =>
       toast({ title: 'Invite failed', description: e.message, variant: 'destructive' }),
@@ -526,7 +526,7 @@ export default function SettingsPage() {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add team member</DialogTitle>
+            <DialogTitle>Invite team member</DialogTitle>
           </DialogHeader>
           <form
             className="grid gap-3"
@@ -536,7 +536,6 @@ export default function SettingsPage() {
               invite.mutate({
                 name: String(fd.get('name')),
                 email: String(fd.get('email')),
-                password: String(fd.get('password')),
                 membershipRole: String(fd.get('membershipRole')),
               });
             }}
@@ -547,9 +546,6 @@ export default function SettingsPage() {
             <FormField label="Email">
               <Input name="email" type="email" required />
             </FormField>
-            <FormField label="Temporary password">
-              <Input name="password" type="password" minLength={8} required />
-            </FormField>
             <FormField label="Role">
               <Select name="membershipRole" defaultValue="CASHIER" options={ROLE_OPTIONS} />
             </FormField>
@@ -558,7 +554,7 @@ export default function SettingsPage() {
                 Cancel
               </Button>
               <Button loading={invite.isPending}>
-                {invite.isPending ? 'Creating…' : 'Create user'}
+                {invite.isPending ? 'Sending…' : 'Send invite'}
               </Button>
             </DialogFooter>
           </form>

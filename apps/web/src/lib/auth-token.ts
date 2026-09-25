@@ -23,9 +23,13 @@ const SESSION_COOKIE = 'inv_session';
 export function setSessionFlag(on: boolean) {
   if (typeof document === 'undefined') return;
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  const sameSite =
+    process.env.NODE_ENV === 'production' || window.location.protocol === 'https:'
+      ? 'Strict'
+      : 'Lax';
   if (on) {
-    document.cookie = `${SESSION_COOKIE}=1; path=/; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${secure}`;
+    document.cookie = `${SESSION_COOKIE}=1; path=/; SameSite=${sameSite}; Max-Age=${7 * 24 * 60 * 60}${secure}`;
     return;
   }
-  document.cookie = `${SESSION_COOKIE}=; path=/; Max-Age=0; SameSite=Lax${secure}`;
+  document.cookie = `${SESSION_COOKIE}=; path=/; Max-Age=0; SameSite=${sameSite}${secure}`;
 }

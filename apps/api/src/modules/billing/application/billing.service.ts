@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -115,6 +116,8 @@ export class BillingService {
         priceYearly: true,
         currency: true,
         features: true,
+        maxUsers: true,
+        maxBranches: true,
         sortOrder: true,
       },
     });
@@ -196,6 +199,26 @@ export class BillingService {
       'Subscription expired — update billing to continue',
       HttpStatus.PAYMENT_REQUIRED,
     );
+  }
+
+  /** Enforce plan maxUsers / maxBranches (0 = unlimited). */
+  async assertPlanSeat(organizationId: string, kind: 'user' | 'branch') {
+    const sub = await this.prisma.organizationSubscription.findUnique({
+      where: { organizationId },
+      include: { plan: { select: { maxUsers: true, maxBranches: true, name: true } } },
+    });
+    if (!sub?.plan) return;
+    const max = kind === 'user' ? sub.plan.maxUsers : sub.plan.maxBranches;
+    if (max === 0) return;
+    const count =
+      kind === 'user'
+        ? await this.prisma.membership.count({ where: { organizationId } })
+        : await this.prisma.branch.count({ where: { organizationId } });
+    if (count >= max) {
+      throw new ForbiddenException(
+        `${sub.plan.name} plan allows ${max} ${kind === 'user' ? 'users' : 'branches'}. Upgrade to add more.`,
+      );
+    }
   }
 
   async getSubscription(organizationId: string) {

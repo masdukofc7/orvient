@@ -36,6 +36,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install
+      - run: pnpm audit --audit-level=high
       - run: pnpm --filter @inventory/shared build
       - run: pnpm --filter @inventory/database generate
       - run: pnpm --filter @inventory/database exec prisma validate

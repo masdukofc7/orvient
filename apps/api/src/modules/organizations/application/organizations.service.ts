@@ -11,10 +11,14 @@ import type {
   UpdateOrganizationInput,
 } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { BillingService } from '../../billing/application/billing.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly billing: BillingService,
+  ) {}
 
   async get(orgId: string) {
     const org = await this.prisma.organization.findUnique({
@@ -49,6 +53,7 @@ export class OrganizationsService {
   }
 
   async createBranch(orgId: string, input: CreateBranchInput) {
+    await this.billing.assertPlanSeat(orgId, 'branch');
     const code = input.code?.trim() || undefined;
     try {
       return await this.prisma.$transaction(async (tx) => {

@@ -7,6 +7,7 @@ import { InventoryTxnType, Prisma } from '@inventory/database';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { AuditService } from '../../common/services/audit.service';
+import { EmailService } from '../../infrastructure/email/email.module';
 
 @Injectable()
 export class InventoryService {
@@ -14,6 +15,7 @@ export class InventoryService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly audit: AuditService,
+    private readonly email: EmailService,
   ) {}
 
   private async requireBranch(
@@ -134,7 +136,41 @@ export class InventoryService {
       after: result.txn,
     });
 
+    const lowAt = Number(result.product.lowStockAt);
+    const afterTotal = Number(result.product.stock);
+    if (params.delta < 0 && afterTotal <= lowAt) {
+      void this.notifyLowStockOnce(params.orgId, result.product);
+    }
+
     return result;
+  }
+
+  private async notifyLowStockOnce(
+    orgId: string,
+    product: { id: string; name: string; sku: string; stock: unknown; lowStockAt: unknown },
+  ) {
+    const key = `lowstock:mail:${orgId}:${product.id}`;
+    const existing = await this.redis.get(key).catch(() => null);
+    if (existing) return;
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, email: true },
+    });
+    if (!org?.email) return;
+    try {
+      await this.email.sendLowStock(org.email, org.name, [
+        {
+          name: product.name,
+          sku: product.sku,
+          stock: Number(product.stock),
+          lowStockAt: Number(product.lowStockAt),
+        },
+      ]);
+      await this.redis.set(key, '1', 86_400).catch(() => undefined);
+    } catch {
+      // email optional — don't fail stock mutation
+    }
   }
 
   private resolveBranchId(branchId?: string | null) {

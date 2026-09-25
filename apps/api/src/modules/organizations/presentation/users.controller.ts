@@ -2,8 +2,10 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   createOrgUserSchema,
+  inviteOrgUserSchema,
   updateOrgUserSchema,
   type CreateOrgUserInput,
+  type InviteOrgUserInput,
   type UpdateOrgUserInput,
 } from '@inventory/shared';
 import { UsersService } from '../application/users.service';
@@ -29,6 +31,14 @@ export class UsersController {
     @Body(new ZodValidationPipe(createOrgUserSchema)) body: CreateOrgUserInput,
   ) {
     return this.users.create(user.organizationId, user.userId, body);
+  }
+
+  @Post('invite')
+  invite(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(inviteOrgUserSchema)) body: InviteOrgUserInput,
+  ) {
+    return this.users.invite(user.organizationId, user.userId, body);
   }
 
   @Patch(':id')

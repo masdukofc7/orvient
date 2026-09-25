@@ -10,6 +10,15 @@ import { validateProductionEnv } from './config/validate-env';
 async function bootstrap() {
   validateProductionEnv();
 
+  if (process.env.SENTRY_DSN) {
+    const Sentry = await import('@sentry/node');
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV ?? 'development',
+      tracesSampleRate: 0.1,
+    });
+  }
+
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,

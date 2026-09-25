@@ -68,6 +68,19 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Atomic incr; sets TTL on first hit. Returns 0 when Redis is down. */
+  async incr(key: string, ttlSeconds: number): Promise<number> {
+    if (!(await this.connect()) || !this.client) return 0;
+    try {
+      const n = await this.client.incr(key);
+      if (n === 1) await this.client.expire(key, ttlSeconds);
+      return n;
+    } catch {
+      this.unavailable = true;
+      return 0;
+    }
+  }
+
   async del(key: string) {
     if (!(await this.connect()) || !this.client) return;
     try {

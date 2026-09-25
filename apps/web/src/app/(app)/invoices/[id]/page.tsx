@@ -38,6 +38,7 @@ function InvoiceDetailInner() {
   const qc = useQueryClient();
   const [voidOpen, setVoidOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [returnQty, setReturnQty] = useState<Record<string, string>>({});
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
   const canVoid = isStaffRole(useAuthStore((s) => s.user?.membershipRole));
@@ -90,11 +91,15 @@ function InvoiceDetailInner() {
   });
 
   const returnInvoice = useMutation({
-    mutationFn: () => api(`/invoices/${params.id}/return`, { method: 'POST' }),
+    mutationFn: (items?: Array<{ itemId: string; quantity: number }>) =>
+      api(`/invoices/${params.id}/return`, {
+        method: 'POST',
+        body: items?.length ? { items } : {},
+      }),
     onSuccess: () => {
       setReturnOpen(false);
       invalidateInvoice();
-      toast({ title: 'Sale returned — stock restored' });
+      toast({ title: 'Return recorded — stock restored' });
     },
     onError: (e: Error) =>
       toast({ title: 'Return failed', description: e.message, variant: 'destructive' }),
@@ -271,15 +276,80 @@ function InvoiceDetailInner() {
         onConfirm={() => voidInvoice.mutate()}
       />
 
-      <ConfirmDialog
+      <Dialog
         open={returnOpen}
-        onOpenChange={setReturnOpen}
-        title="Return this sale?"
-        description="Full return: stock is restored at the sale branch and the invoice is voided."
-        confirmLabel="Return sale"
-        loading={returnInvoice.isPending}
-        onConfirm={() => returnInvoice.mutate()}
-      />
+        onOpenChange={(open) => {
+          setReturnOpen(open);
+          if (open && data?.items) {
+            const init: Record<string, string> = {};
+            for (const it of data.items) {
+              const sold = Number(it.quantity);
+              const done = Number(it.quantityReturned ?? 0);
+              const left = Math.max(0, sold - done);
+              init[it.id] = left > 0 ? String(left) : '0';
+            }
+            setReturnQty(init);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Return lines</DialogTitle>
+          </DialogHeader>
+          <div className="grid max-h-72 gap-3 overflow-y-auto">
+            {(data?.items ?? []).map((it) => {
+              const sold = Number(it.quantity);
+              const done = Number(it.quantityReturned ?? 0);
+              const left = Math.max(0, sold - done);
+              if (left <= 0) return null;
+              return (
+                <FormField
+                  key={it.id}
+                  label={`${it.name} (sold ${sold}, left ${left})`}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    max={left}
+                    step="0.01"
+                    value={returnQty[it.id] ?? ''}
+                    onChange={(e) =>
+                      setReturnQty((prev) => ({ ...prev, [it.id]: e.target.value }))
+                    }
+                  />
+                </FormField>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReturnOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              loading={returnInvoice.isPending}
+              onClick={() => returnInvoice.mutate(undefined)}
+            >
+              Full return
+            </Button>
+            <Button
+              loading={returnInvoice.isPending}
+              onClick={() => {
+                const items = Object.entries(returnQty)
+                  .map(([itemId, q]) => ({ itemId, quantity: Number(q) }))
+                  .filter((x) => Number.isFinite(x.quantity) && x.quantity > 0);
+                if (!items.length) {
+                  toast({ title: 'Enter at least one quantity', variant: 'destructive' });
+                  return;
+                }
+                returnInvoice.mutate(items);
+              }}
+            >
+              Return selected
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>

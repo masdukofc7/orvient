@@ -5,9 +5,11 @@ import {
   createInvoiceSchema,
   invoiceListQuerySchema,
   recordPaymentSchema,
+  returnInvoiceLinesSchema,
   type CreateInvoiceInput,
   type InvoiceListQuery,
   type RecordPaymentInput,
+  type ReturnInvoiceLinesInput,
 } from '@inventory/shared';
 import { InvoicesService } from '../application/invoices.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
@@ -79,7 +81,16 @@ export class InvoicesController {
 
   @Post(':id/return')
   @Roles('OWNER', 'ADMIN', 'MANAGER')
-  returnSale(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.invoices.returnInvoice(user.organizationId, user.userId, id);
+  returnSale(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(returnInvoiceLinesSchema)) body: ReturnInvoiceLinesInput,
+  ) {
+    return this.invoices.returnInvoice(
+      user.organizationId,
+      user.userId,
+      id,
+      body.items,
+    );
   }
 }
