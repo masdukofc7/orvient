@@ -156,10 +156,36 @@ function BillingSettingsInner() {
   });
 
   if (sub.isLoading || plans.isLoading) {
-    return <BillingPageSkeleton />;
+    return (
+      <PageContent className="mx-auto max-w-3xl">
+        <PageHeader
+          title="Billing"
+          description="Choose a plan when you are ready to pay"
+          actions={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/pricing">Compare plans</Link>
+            </Button>
+          }
+        />
+        <BillingPageSkeleton />
+      </PageContent>
+    );
   }
   if (sub.isError || !sub.data) {
-    return <ErrorState title="Could not load billing" onRetry={() => void sub.refetch()} />;
+    return (
+      <PageContent className="mx-auto max-w-3xl">
+        <PageHeader
+          title="Billing"
+          description="Choose a plan when you are ready to pay"
+          actions={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/pricing">Compare plans</Link>
+            </Button>
+          }
+        />
+        <ErrorState title="Could not load billing" onRetry={() => void sub.refetch()} />
+      </PageContent>
+    );
   }
 
   const s = sub.data;
@@ -435,7 +461,22 @@ function BillingSettingsInner() {
 
 export default function SettingsBillingPage() {
   return (
-    <Suspense fallback={<BillingPageSkeleton />}>
+    <Suspense
+      fallback={
+        <PageContent className="mx-auto max-w-3xl">
+          <PageHeader
+            title="Billing"
+            description="Choose a plan when you are ready to pay"
+            actions={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/pricing">Compare plans</Link>
+              </Button>
+            }
+          />
+          <BillingPageSkeleton />
+        </PageContent>
+      }
+    >
       <BillingSettingsInner />
     </Suspense>
   );

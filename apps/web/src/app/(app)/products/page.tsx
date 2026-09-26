@@ -47,7 +47,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toaster';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 import { BarcodeSvg } from '@/components/ui/barcode-svg';
 
 type Product = {
@@ -573,7 +573,10 @@ export default function ProductsPage() {
         />
       </PageFilters>
       {list.isLoading ? (
-        <TableSkeleton rows={10} cols={6} />
+        <div className="space-y-0">
+          <TableSkeleton rows={10} cols={9} />
+          <PaginationSkeleton />
+        </div>
       ) : list.isError ? (
         <ErrorState title="Could not load products" onRetry={() => void list.refetch()} />
       ) : (

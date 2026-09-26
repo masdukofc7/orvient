@@ -17,7 +17,7 @@ import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { PurchaseOrderStatusBadge } from '@/components/ui/status-badge';
 import { ErrorState } from '@/components/ui/error-state';
 import { Pagination } from '@/components/ui/pagination';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 
 type PurchaseOrder = {
   id: string;
@@ -133,7 +133,10 @@ export default function PurchaseOrdersPage() {
         />
       </PageFilters>
       {list.isLoading ? (
-        <TableSkeleton rows={10} cols={5} />
+        <div className="space-y-0">
+          <TableSkeleton rows={10} cols={5} />
+          <PaginationSkeleton />
+        </div>
       ) : list.isError ? (
         <ErrorState title="Could not load purchase orders" onRetry={() => void list.refetch()} />
       ) : (

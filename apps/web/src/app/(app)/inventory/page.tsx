@@ -24,7 +24,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/ui/toaster';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 import { formatDateTime } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAuthStore } from '@/stores';
@@ -380,7 +380,10 @@ export default function InventoryPage() {
 
       <Section title="Ledger">
         {ledger.isLoading && !ledger.data ? (
-          <TableSkeleton rows={8} cols={5} />
+          <div className="space-y-0">
+            <TableSkeleton rows={8} cols={5} />
+            <PaginationSkeleton />
+          </div>
         ) : ledger.isError ? (
           <ErrorState title="Could not load ledger" onRetry={() => void ledger.refetch()} />
         ) : (

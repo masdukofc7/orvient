@@ -16,7 +16,6 @@ import { useAuthStore } from '@/stores';
 import { api, onSessionRestore, restoreSession } from '@/lib/api';
 import { CommandPalette } from '@/components/command/command-palette';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { PageSkeleton } from '@/components/skeletons';
 import { RouteProgress } from '@/components/layout/route-progress';
 import { BillingBanner } from '@/components/billing/billing-banner';
 
@@ -310,7 +309,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           </div>
-          {showPage ? children : <PageSkeleton pathname={pathname} />}
+          {showPage ? children : null}
         </div>
       ) : (
       <>
@@ -403,7 +402,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {showPage ? <BillingBanner /> : null}
 
           <main className="min-w-0 flex-1 px-3 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-8 print:p-0 print:pb-0">
-            {showPage ? children : <PageSkeleton pathname={pathname} />}
+            {showPage ? children : null}
           </main>
 
           <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">

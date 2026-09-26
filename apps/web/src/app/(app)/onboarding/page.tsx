@@ -18,7 +18,7 @@ import { FormField } from '@/components/ui/form-field';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageContent } from '@/components/ui/page-content';
 import { Card, CardBody } from '@/components/ui/card';
-import { FormPageSkeleton, FormFieldsSkeleton } from '@/components/skeletons';
+import { FormFieldsSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
 import { useToast } from '@/components/ui/toaster';
 import { ActionBar } from '@/components/ui/action-bar';
@@ -81,7 +81,19 @@ export default function OnboardingPage() {
   });
 
   if (!ready) {
-    return <FormPageSkeleton width="form" fields={3} columns={1} />;
+    return (
+      <PageContent width="form" className="max-w-md">
+        <PageHeader
+          title="Set up your store"
+          description="Shown on invoices — skip and finish later in Settings"
+        />
+        <Card>
+          <CardBody>
+            <FormFieldsSkeleton fields={3} columns={1} />
+          </CardBody>
+        </Card>
+      </PageContent>
+    );
   }
 
   const currencyOptions = ensureCurrencyOption(org.data?.defaultCurrency ?? DEFAULT_CURRENCY);

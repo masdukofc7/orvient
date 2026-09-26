@@ -8,7 +8,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { PageHeader } from '@/components/ui/page-header';
 import { SearchInput } from '@/components/ui/search-input';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
 import { Pagination } from '@/components/ui/pagination';
 
@@ -83,7 +83,10 @@ export default function PlatformAuditPage() {
         placeholder="Search action or entity…"
       />
       {list.isLoading && !list.data ? (
-        <TableSkeleton />
+        <div className="space-y-0">
+          <TableSkeleton rows={8} cols={5} />
+          <PaginationSkeleton />
+        </div>
       ) : list.isError ? (
         <ErrorState title="Could not load audit" onRetry={() => void list.refetch()} />
       ) : (

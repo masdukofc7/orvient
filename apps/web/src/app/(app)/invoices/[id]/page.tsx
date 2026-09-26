@@ -402,14 +402,16 @@ function InvoiceDetailInner() {
 function InvoiceDetailFallback() {
   return (
     <PageContent>
-      <PageHeader
-        title="Invoice"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/invoices">Back</Link>
-          </Button>
-        }
-      />
+      <div className="no-print">
+        <PageHeader
+          title="Invoice"
+          actions={
+            <Button asChild variant="outline">
+              <Link href="/invoices">Back</Link>
+            </Button>
+          }
+        />
+      </div>
       <ReceiptSkeleton />
     </PageContent>
   );

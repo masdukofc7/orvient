@@ -147,7 +147,14 @@ export default function PurchaseOrderDetailPage() {
     },
   ];
 
-  if (po.isLoading && !po.data) return <DetailPageSkeleton />;
+  if (po.isLoading && !po.data) {
+    return (
+      <PageContent>
+        <PageHeader title="Purchase order" description="Loading…" />
+        <DetailPageSkeleton fields={4} />
+      </PageContent>
+    );
+  }
   if (po.isError || !po.data) {
     return <ErrorState title="Could not load purchase order" onRetry={() => void po.refetch()} />;
   }

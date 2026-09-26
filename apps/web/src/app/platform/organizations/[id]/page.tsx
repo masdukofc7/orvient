@@ -16,7 +16,7 @@ import { MetricCard, MetricGrid } from '@/components/ui/metric-card';
 import { Section } from '@/components/ui/section';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { ErrorState } from '@/components/ui/error-state';
-import { DetailPageSkeleton } from '@/components/skeletons';
+import { PlatformOrgDetailSkeleton } from '@/components/skeletons';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toaster';
 
@@ -109,7 +109,12 @@ export default function PlatformOrgDetailPage() {
   ];
 
   if (isLoading && !data) {
-    return <DetailPageSkeleton fields={4} />;
+    return (
+      <div className="space-y-6 sm:space-y-7">
+        <PageHeader title="Organization" description="Loading workspace…" />
+        <PlatformOrgDetailSkeleton />
+      </div>
+    );
   }
 
   if (isError || !data) {

@@ -123,7 +123,7 @@ export default function PlatformBillingPage() {
     <div className="space-y-4">
       <PageHeader title="Billing requests" description="Offline payments awaiting review" />
       {list.isLoading && !list.data ? (
-        <TableSkeleton rows={6} cols={7} />
+        <TableSkeleton rows={6} cols={9} />
       ) : list.isError ? (
         <ErrorState title="Could not load requests" onRetry={() => void list.refetch()} />
       ) : (

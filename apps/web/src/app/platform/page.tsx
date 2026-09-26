@@ -32,11 +32,17 @@ export default function PlatformOverviewPage() {
         description="All Orvient workspaces and accounts"
       />
       {isLoading && !data ? (
-        <div className="space-y-6">
-          <MetricCardsSkeleton count={3} columns={3} />
-          <MetricCardsSkeleton count={3} columns={3} />
-          <MetricCardsSkeleton count={2} columns={2} />
-        </div>
+        <>
+          <Section title="Workspaces">
+            <MetricCardsSkeleton count={3} columns={3} />
+          </Section>
+          <Section title="Activity">
+            <MetricCardsSkeleton count={3} columns={3} />
+          </Section>
+          <Section title="Last 7 days">
+            <MetricCardsSkeleton count={2} columns={2} />
+          </Section>
+        </>
       ) : isError ? (
         <ErrorState title="Could not load overview" onRetry={() => void refetch()} />
       ) : (

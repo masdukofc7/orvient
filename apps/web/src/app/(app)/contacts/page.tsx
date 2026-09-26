@@ -38,7 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toaster';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 
 type Contact = {
   id: string;
@@ -222,7 +222,10 @@ export default function ContactsPage() {
         />
       </PageFilters>
       {list.isLoading ? (
-        <TableSkeleton rows={8} cols={5} />
+        <div className="space-y-0">
+          <TableSkeleton rows={8} cols={6} />
+          <PaginationSkeleton />
+        </div>
       ) : list.isError ? (
         <ErrorState title="Could not load contacts" onRetry={() => void list.refetch()} />
       ) : (

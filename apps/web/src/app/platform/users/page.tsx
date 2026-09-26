@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
-import { TableSkeleton } from '@/components/skeletons';
+import { PaginationSkeleton, TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
 import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -193,7 +193,10 @@ export default function PlatformUsersPage() {
         placeholder="Search name or email…"
       />
       {list.isLoading && !list.data ? (
-        <TableSkeleton />
+        <div className="space-y-0">
+          <TableSkeleton rows={8} cols={7} />
+          <PaginationSkeleton />
+        </div>
       ) : list.isError ? (
         <ErrorState title="Could not load users" onRetry={() => void list.refetch()} />
       ) : (
