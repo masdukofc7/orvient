@@ -7,6 +7,7 @@ coverage
 .env
 .env.local
 .env.*.local
+.env.production
 packages/database/.env
 apps/api/.env
 apps/web/.env.local
@@ -20,3 +21,5 @@ apps/web/public/sw.js.map
 apps/api/uploads
 .prisma
 packages/database/generated
+infra/cloudflared/credentials.json
+infra/cloudflared/config.yml

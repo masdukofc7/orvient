@@ -1,0 +1,13 @@
+# Locally-managed tunnel only (dashboard tunnels ignore this file).
+# Rendered by scripts/deploy-vps.sh from PUBLIC_HOST + tunnel id.
+tunnel: __TUNNEL_ID__
+credentials-file: /etc/cloudflared/credentials.json
+
+# Same-origin split: /api/* → Nest, everything else → Next.js
+ingress:
+  - hostname: __PUBLIC_HOST__
+    path: /api/.*
+    service: http://api:4000
+  - hostname: __PUBLIC_HOST__
+    service: http://web:3000
+  - service: http_status:404

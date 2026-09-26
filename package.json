@@ -46,6 +46,7 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "docker:seed": "docker compose exec api pnpm --filter @inventory/database seed",
+    "deploy:vps": "node scripts/deploy-vps.mjs",
     "test:db": "pnpm --filter @inventory/api test:db",
     "db:backup": "node scripts/backup-postgres.mjs",
 

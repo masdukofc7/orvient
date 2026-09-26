@@ -1,0 +1,146 @@
+# Orvient — isolated stack for the shared OVH VPS (alongside Distrofy + Vela).
+# Does NOT attach to distrofy-net or vela-net. Shares only host hardware / public IP.
+#
+# Usage (on VPS):
+#   cd /var/www/orvient
+#   cp infra/.env.production.example .env.production   # fill secrets
+#   ./scripts/deploy-vps.sh
+
+name: orvient
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: orvient-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-inventory}
+      POSTGRES_USER: ${POSTGRES_USER:-inventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - orvient_postgres_data:/var/lib/postgresql/data
+    networks:
+      - orvient-net
+    # No public publish — access via compose network or SSH tunnel.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-inventory} -d ${POSTGRES_DB:-inventory}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    cpus: "0.75"
+
+  # ponytail: pin 7.2 — redis:alpine (8.x) has segfaulted on this VPS family
+  redis:
+    image: redis:7.2-alpine
+    container_name: orvient-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD}",
+        "--maxmemory",
+        "96mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    volumes:
+      - orvient_redis_data:/data
+    networks:
+      - orvient-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 128m
+    cpus: "0.25"
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: orvient-api
+    restart: unless-stopped
+    env_file:
+      - ../.env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-inventory}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_DISABLED: "false"
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN e.g. https://app.example.com}
+      COOKIE_SECURE: "true"
+      COOKIE_SAME_SITE: strict
+      API_PORT: 4000
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orvient-net
+    # Localhost only — deploy health + SSH tunnel. Public ingress is Cloudflare Tunnel.
+    ports:
+      - "127.0.0.1:3200:4000"
+    command: ["pnpm", "--filter", "@inventory/api", "start:prod"]
+    mem_limit: 512m
+    cpus: "1.0"
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL e.g. https://app.example.com/api/v1}
+    container_name: orvient-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - api
+    networks:
+      - orvient-net
+    mem_limit: 512m
+    cpus: "0.75"
+
+  cloudflared:
+    # Pin — avoid :latest drift; match Vela's known-good family on this VPS.
+    image: cloudflare/cloudflared:2026.7.2
+    container_name: orvient-cloudflared
+    restart: unless-stopped
+    # http2: stable vs QUIC edge quirks on this host family.
+    # Locally-managed tunnel: credentials.json + config.yml (not --token).
+    command: tunnel --no-autoupdate --protocol http2 --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    # No depends_on api/web — recreating app must not stop the tunnel (Cloudflare 522).
+    networks:
+      - orvient-net
+    mem_limit: 128m
+    cpus: "0.25"
+
+networks:
+  orvient-net:
+    name: orvient-net
+    driver: bridge
+
+volumes:
+  orvient_postgres_data:
+    name: orvient_postgres_data
+  orvient_redis_data:
+    name: orvient_redis_data

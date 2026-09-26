@@ -22,11 +22,13 @@ orvient/
 ├── docker/
 │   ├── api.Dockerfile
 │   ├── web.Dockerfile
-│   └── Caddyfile            # TLS reverse proxy (prod)
-├── scripts/                 # setup, check, backup, Windows helpers
+│   └── Caddyfile            # TLS reverse proxy (dedicated-box prod)
+├── infra/                   # shared-VPS Compose + Cloudflare Tunnel
+├── scripts/                 # setup, check, backup, deploy-vps, Windows helpers
+├── docs/VPS.md              # shared OVH VPS (Distrofy + Vela co-tenancy)
 ├── .github/workflows/ci.yml
 ├── docker-compose.yml       # local: postgres, redis, api, web
-├── docker-compose.prod.yml  # prod: + Caddy; DB/Redis not published
+├── docker-compose.prod.yml  # dedicated box: + Caddy; DB/Redis not published
 ├── turbo.json
 ├── pnpm-workspace.yaml
 └── .env.example
@@ -64,7 +66,7 @@ orvient/
 | **Org / users** | Org get/patch · branches · user list/create/patch · email invite · plan seat caps |
 | **Billing** | Plans · Dodo checkout · manual requests · subscription gate · `maxUsers` / `maxBranches` |
 | **Platform** | Admin overview · orgs/users/audit · billing request review · CSV exports |
-| **Health** | `GET /health` (Postgres + Redis) · `GET /health/ready` |
+| **Health** | `GET /api/v1/health` (Postgres + Redis) · `GET /api/v1/health/ready` |
 
 **Not in this repo:** service worker / full offline PWA.
 
@@ -118,7 +120,7 @@ apps/api/src/
 | Users | `GET/POST /users` · `POST /users/invite` · `PATCH /users/:id` |
 | Billing | `GET /billing/plans` · `GET /billing/subscription` · `POST /billing/checkout` · `.../checkout/sync` · `.../manual-request` · `POST /billing/webhooks/dodo` |
 | Platform | `GET /platform/overview` · orgs/users/audit · exports · `GET/PATCH /platform/billing/requests` |
-| Health | `GET /health` · `GET /health/ready` |
+| Health | `GET /api/v1/health` · `GET /api/v1/health/ready` |
 
 Swagger (dev / non-prod only): http://localhost:4000/api/docs  
 Force in production with `ENABLE_SWAGGER=true`.
@@ -274,9 +276,10 @@ Or local Postgres: `.\scripts\native-windows.ps1 local`
 | `pnpm check` | Full validate + typecheck + builds |
 | `pnpm docker:up` | Dev Compose stack (migrate, **no** auto-seed) |
 | `pnpm docker:seed` | Seed in running API container |
-| `pnpm docker:prod` | Prod stack (Caddy TLS, DB not published) |
+| `pnpm docker:prod` | Dedicated-box prod (Caddy TLS, DB not published) |
 | `pnpm docker:prod:seed` | Seed in prod API container |
 | `pnpm docker:prod:down` / `docker:prod:logs` | Prod tear down / logs |
+| `pnpm deploy:vps` | Shared VPS: SSH → pull → `deploy-vps.sh` (needs `VPS_SSH`) |
 | `pnpm docker:down` / `docker:logs` | Dev tear down / logs |
 
 If `pnpm` is not on PATH: `npx pnpm@9.15.0 <script>`
@@ -323,7 +326,17 @@ pnpm docker:up
 pnpm docker:seed   # first boot only
 ```
 
-**Production** (`docker-compose.prod.yml`: no DB/Redis host ports, Caddy TLS, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=strict`):
+**Shared OVH VPS** (same box as Distrofy + Vela — Cloudflare Tunnel, no host 80/443): see **[docs/VPS.md](./docs/VPS.md)**.
+
+```bash
+# On VPS after one-time tunnel + .env.production setup:
+./scripts/deploy-vps.sh
+
+# From laptop:
+#   $env:VPS_SSH = "ubuntu@<server>"; pnpm deploy:vps
+```
+
+**Dedicated box** (`docker-compose.prod.yml`: Caddy TLS on 80/443, DB/Redis not published):
 
 ```bash
 # Required in .env:
@@ -339,7 +352,7 @@ pnpm docker:prod
 pnpm docker:prod:seed   # first boot only — then change seed admin password
 ```
 
-Compose prod services: `postgres`, `redis`, `api` (migrate + start), `web`, `caddy` (80/443).
+Compose prod (dedicated) services: `postgres`, `redis`, `api` (migrate + start), `web`, `caddy` (80/443).
 
 ---
 
@@ -347,11 +360,11 @@ Compose prod services: `postgres`, `redis`, `api` (migrate + start), `web`, `cad
 
 1. Strong `JWT_ACCESS_SECRET` (≥32 chars, **not** a `change-me` placeholder)
 2. Non-default `POSTGRES_PASSWORD` (default `inventory/inventory` refused in production)
-3. `COOKIE_SECURE=true` and same-origin `COOKIE_SAME_SITE=strict` behind Caddy
-4. Use `pnpm docker:prod` (or equivalent): TLS via Caddy, DB/Redis not published
+3. `COOKIE_SECURE=true` and same-origin `COOKIE_SAME_SITE=strict` behind Caddy or Cloudflare Tunnel
+4. Shared VPS: [`docs/VPS.md`](./docs/VPS.md). Dedicated box: `pnpm docker:prod` (TLS via Caddy, DB/Redis not published)
 5. Migrate on release; seed **once**, then rotate seed admin password
 6. Back up Postgres regularly (`pnpm db:backup` or volume snapshots)
-7. Redis is cache/lockout — ephemeral is fine; `/health` may report `degraded`
+7. Redis is cache/lockout — ephemeral is fine; `/api/v1/health` may report `degraded`
 8. Swagger off unless `ENABLE_SWAGGER=true`
 9. Past-due subscriptions blocked after grace (billing/auth/platform stay open)
 10. Set `RESEND_API_KEY` for invites / password reset / low-stock mail
@@ -377,6 +390,8 @@ Compose prod services: `postgres`, `redis`, `api` (migrate + start), `web`, `cad
 | `scripts/check.mjs` | Full project check |
 | `scripts/api-dev.mjs` | API dev runner |
 | `scripts/backup-postgres.mjs` | `pg_dump` backup (`pnpm db:backup`) |
+| `scripts/deploy-vps.sh` | Shared-VPS deploy (Compose + tunnel) |
+| `scripts/deploy-vps.mjs` | From laptop: SSH + pull + `deploy-vps.sh` |
 | `scripts/win.ps1` | Windows PATH / bootstrap / dev helpers |
 | `scripts/native-windows.ps1` | Windows without Docker (hosted or local Postgres) |
 | `scripts/run.cmd` | Windows command shim |
