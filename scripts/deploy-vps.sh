@@ -66,6 +66,8 @@ write_cloudflared_config() {
     exit 1
   fi
   sed -e "s/__TUNNEL_ID__/$tid/g" -e "s/__PUBLIC_HOST__/$PUBLIC_HOST/g" "$tpl" >"$cfg"
+  # cloudflared container user must read credentials (600 → permission denied)
+  chmod 644 "$creds" "$cfg" 2>/dev/null || true
   echo "==> cloudflared config for tunnel $tid → $PUBLIC_HOST"
 }
 

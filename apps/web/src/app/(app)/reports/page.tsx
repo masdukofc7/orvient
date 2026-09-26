@@ -17,6 +17,7 @@ import { DEFAULT_CURRENCY } from '@inventory/shared';
 import { Button } from '@/components/ui/button';
 import { downloadCsv } from '@/lib/csv';
 import { downloadCsv as downloadCsvText } from '@/lib/utils';
+import { useToast } from '@/components/ui/toaster';
 
 type LowStockRow = {
   id: string;
@@ -53,6 +54,7 @@ const PRESETS = [
 ] as const;
 
 export default function ReportsPage() {
+  const { toast } = useToast();
   const currency = useAuthStore((s) => s.user?.defaultCurrency ?? DEFAULT_CURRENCY);
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
@@ -155,8 +157,13 @@ export default function ReportsPage() {
                     `/reports/export/sales?from=${from}T00:00:00.000Z&to=${to}T23:59:59.999Z`,
                   );
                   downloadCsvText(res.filename, res.csv);
+                  toast({ title: 'Export downloaded' });
                 } catch (e) {
-                  console.error(e);
+                  toast({
+                    title: 'Export failed',
+                    description: e instanceof Error ? e.message : undefined,
+                    variant: 'destructive',
+                  });
                 }
               }}
             >

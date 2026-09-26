@@ -36,11 +36,12 @@ export class RedisService implements OnModuleDestroy {
   }
 
   private async connect() {
-    if (!this.enabled || !this.client || this.unavailable) return false;
+    if (!this.enabled || !this.client) return false;
     try {
       if (this.client.status === 'wait') {
         await this.client.connect();
       }
+      if (this.client.status !== 'ready') return false;
       this.unavailable = false;
       return true;
     } catch {
