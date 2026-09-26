@@ -42,37 +42,44 @@ export function Toaster({ children }: { children?: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <ToastPrimitive.Provider swipeDirection="right">
-        <div className="pointer-events-none fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-[100] flex w-[calc(100%-2rem)] max-w-[360px] flex-col gap-2 lg:bottom-4">
-          {items.map((item) => (
-            <ToastPrimitive.Root
-              key={item.id}
-              duration={4000}
-              onOpenChange={(open) => {
-                if (!open) dismiss(item.id);
-              }}
-              className={cn(
-                'pointer-events-auto relative rounded-lg border border-border bg-card p-4 pr-10 text-card-foreground shadow-soft',
-                item.variant === 'destructive' && 'border-destructive/40',
-              )}
-            >
-              <ToastPrimitive.Title className="text-sm font-medium">{item.title}</ToastPrimitive.Title>
-              {item.description ? (
-                <ToastPrimitive.Description className="mt-1 text-sm text-muted-foreground">
-                  {item.description}
-                </ToastPrimitive.Description>
-              ) : null}
-              <ToastPrimitive.Close
-                className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Dismiss"
-                onClick={() => dismiss(item.id)}
+      <ToastPrimitive.Provider swipeDirection="right" duration={5000}>
+        {items.map((item) => (
+          <ToastPrimitive.Root
+            key={item.id}
+            open
+            onOpenChange={(open) => {
+              if (!open) dismiss(item.id);
+            }}
+            className={cn(
+              'pointer-events-auto relative rounded-lg border border-border bg-card p-4 pr-10 text-card-foreground shadow-soft data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=open]:slide-in-from-bottom-full data-[state=closed]:slide-out-to-right-full',
+              item.variant === 'destructive' &&
+                'border-destructive bg-destructive text-destructive-foreground',
+            )}
+          >
+            <ToastPrimitive.Title className="text-sm font-medium">{item.title}</ToastPrimitive.Title>
+            {item.description ? (
+              <ToastPrimitive.Description
+                className={cn(
+                  'mt-1 text-sm',
+                  item.variant === 'destructive'
+                    ? 'text-destructive-foreground/90'
+                    : 'text-muted-foreground',
+                )}
               >
-                <X className="h-4 w-4" />
-              </ToastPrimitive.Close>
-            </ToastPrimitive.Root>
-          ))}
-        </div>
-        <ToastPrimitive.Viewport className="sr-only" />
+                {item.description}
+              </ToastPrimitive.Description>
+            ) : null}
+            <ToastPrimitive.Close
+              className="absolute right-2 top-2 rounded-md p-1 opacity-70 hover:opacity-100"
+              aria-label="Dismiss"
+              onClick={() => dismiss(item.id)}
+            >
+              <X className="h-4 w-4" />
+            </ToastPrimitive.Close>
+          </ToastPrimitive.Root>
+        ))}
+        {/* Radix portals toast roots into Viewport — must be visible, not sr-only */}
+        <ToastPrimitive.Viewport className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[100] flex w-[calc(100%-2rem)] max-w-[360px] flex-col gap-2 outline-none" />
       </ToastPrimitive.Provider>
     </ToastContext.Provider>
   );
