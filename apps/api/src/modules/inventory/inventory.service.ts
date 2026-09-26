@@ -404,25 +404,28 @@ export class InventoryService {
 
   async ledger(
     orgId: string,
-    query: { cursor?: string; limit?: number; productId?: string; branchId?: string },
+    query: { page?: number; limit?: number; productId?: string; branchId?: string },
   ) {
-    const limit = query.limit ?? 50;
-    const items = await this.prisma.inventoryTransaction.findMany({
-      where: {
-        organizationId: orgId,
-        ...(query.productId ? { productId: query.productId } : {}),
-        ...(query.branchId ? { branchId: query.branchId } : {}),
-      },
-      include: {
-        product: { select: { id: true, name: true, sku: true } },
-      },
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    });
-    const hasMore = items.length > limit;
-    const data = hasMore ? items.slice(0, limit) : items;
-    return { data, nextCursor: hasMore ? data[data.length - 1]?.id : null };
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const where = {
+      organizationId: orgId,
+      ...(query.productId ? { productId: query.productId } : {}),
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+    };
+    const [total, data] = await Promise.all([
+      this.prisma.inventoryTransaction.count({ where }),
+      this.prisma.inventoryTransaction.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, sku: true } },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+    ]);
+    return { data, total, page, limit };
   }
 
   history(orgId: string, productId: string, branchId?: string) {

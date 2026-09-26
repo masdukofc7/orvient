@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma } from '@inventory/database';
 import {
   CreateProductInput,
   UpdateProductInput,
   ProductListQuery,
   resolveProductBarcode,
+  parseProductCsv,
 } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
@@ -160,6 +166,59 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * Create products from a batch (or full CSV). Continues past row errors;
+   * does not update existing SKUs. Prefer small batches from the client.
+   */
+  async import(
+    orgId: string,
+    userId: string,
+    body: { csv: string } | { products: CreateProductInput[] },
+    branchId?: string | null,
+  ) {
+    let pending: Array<{ line: number; input: CreateProductInput }>;
+    const errors: Array<{ line: number; message: string }> = [];
+
+    if ('csv' in body) {
+      let parsed: ReturnType<typeof parseProductCsv>;
+      try {
+        parsed = parseProductCsv(body.csv);
+      } catch (e) {
+        throw new BadRequestException(e instanceof Error ? e.message : 'Invalid CSV');
+      }
+      errors.push(...parsed.errors);
+      pending = parsed.rows;
+    } else {
+      pending = body.products.map((input, i) => ({ line: i + 1, input }));
+    }
+
+    let created = 0;
+    for (const { line, input } of pending) {
+      try {
+        await this.create(orgId, userId, input, branchId);
+        created += 1;
+      } catch (e) {
+        const message =
+          e instanceof ConflictException
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : 'Create failed';
+        errors.push({ line, message });
+      }
+    }
+
+    await this.audit.log({
+      organizationId: orgId,
+      userId,
+      action: 'product.import',
+      entityType: 'Product',
+      after: { created, failed: errors.length },
+    });
+
+    return { created, failed: errors.length, errors: errors.slice(0, 50) };
+  }
+
   /** Set barcode = sku for products with a blank barcode. Skips SKU conflicts. */
   async backfillBarcodes(orgId: string, userId: string) {
     const blanks = await this.prisma.product.findMany({
@@ -223,7 +282,8 @@ export class ProductsService {
   }
 
   async list(orgId: string, query: ProductListQuery, branchId?: string | null) {
-    const limit = query.limit ?? 50;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
     const where: Prisma.ProductWhereInput = {
       organizationId: orgId,
       deletedAt: null,
@@ -240,20 +300,17 @@ export class ProductsService {
         : {}),
     };
 
-    const items = await this.prisma.product.findMany({
-      where,
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-    });
-
-    const hasMore = items.length > limit;
-    const page = hasMore ? items.slice(0, limit) : items;
-    const data = await this.withBranchStockMany(page, branchId);
-    return {
-      data,
-      nextCursor: hasMore ? data[data.length - 1]?.id : null,
-    };
+    const [total, rows] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      }),
+    ]);
+    const data = await this.withBranchStockMany(rows, branchId);
+    return { data, total, page, limit };
   }
 
   private async withBranchStock<T extends { id: string; stock: unknown }>(

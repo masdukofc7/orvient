@@ -56,7 +56,7 @@ orvient/
 | Area | Capabilities |
 |------|----------------|
 | **Auth** | Signup / login (multi-org) / switch-org · switch-branch / refresh / logout / me · forgot+reset password · accept invite · JWT + httpOnly cookies · login lockout |
-| **Products** | CRUD · barcode lookup · barcode backfill · status filters |
+| **Products** | CRUD · CSV import · barcode lookup · barcode backfill · status filters |
 | **Contacts** | Customers & suppliers · CRUD |
 | **Inventory** | Stock in / out / adjust / transfer · ledger · history · low-stock email (Resend) |
 | **Purchase orders** | Create · list · detail · receive (partial/full) · cancel |
@@ -108,7 +108,7 @@ apps/api/src/
 | Module | Routes |
 |--------|--------|
 | Auth | `POST /auth/signup`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`, `/accept-invite`, `/switch-org`, `/switch-branch` · `GET /auth/me`, `/auth/memberships` |
-| Products | `GET/POST /products` · `GET /products/by-barcode/:code` · `GET/PATCH/DELETE /products/:id` · `POST /products/backfill-barcodes` |
+| Products | `GET/POST /products` · `POST /products/import` · `GET /products/by-barcode/:code` · `GET/PATCH/DELETE /products/:id` · `POST /products/backfill-barcodes` |
 | Contacts | `GET/POST /contacts` · `GET/PATCH/DELETE /contacts/:id` |
 | Inventory | `POST /inventory/stock-in\|stock-out\|adjust\|transfer` · `GET /inventory/ledger` · `GET /inventory/history/:productId` |
 | Purchase orders | `GET/POST /purchase-orders` · `GET /purchase-orders/:id` · `POST .../receive` · `POST .../cancel` |

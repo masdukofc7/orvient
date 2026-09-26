@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrganizationStatus, PlatformRole, Prisma } from '@inventory/database';
-import type {
-  PaginationQuery,
-  PlatformOrgListQuery,
-  PlatformUpdateOrgInput,
-  PlatformUpdateUserInput,
-  PlatformUserListQuery,
+import {
+  pageOffset,
+  type PaginationQuery,
+  type PlatformOrgListQuery,
+  type PlatformUpdateOrgInput,
+  type PlatformUpdateUserInput,
+  type PlatformUserListQuery,
 } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
@@ -63,18 +64,22 @@ export class PlatformService {
 
   async listOrganizations(query: PlatformOrgListQuery) {
     const where = this.orgWhere(query);
-    const rows = await this.prisma.organization.findMany({
-      where,
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { memberships: true } } },
-    });
-    const hasMore = rows.length > query.limit;
-    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const [total, rows] = await Promise.all([
+      this.prisma.organization.count({ where }),
+      this.prisma.organization.findMany({
+        where,
+        ...pageOffset(page, limit),
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { memberships: true } } },
+      }),
+    ]);
     return {
-      items: items.map((o) => this.orgListItem(o)),
-      nextCursor: hasMore ? items[items.length - 1]?.id : null,
+      items: rows.map((o) => this.orgListItem(o)),
+      total,
+      page,
+      limit,
     };
   }
 
@@ -231,22 +236,26 @@ export class PlatformService {
 
   async listUsers(query: PlatformUserListQuery) {
     const where = this.userWhere(query);
-    const rows = await this.prisma.user.findMany({
-      where,
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: { createdAt: 'desc' },
-      include: {
-        memberships: {
-          include: { organization: { select: { id: true, name: true, slug: true } } },
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const [total, rows] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        ...pageOffset(page, limit),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          memberships: {
+            include: { organization: { select: { id: true, name: true, slug: true } } },
+          },
         },
-      },
-    });
-    const hasMore = rows.length > query.limit;
-    const items = hasMore ? rows.slice(0, query.limit) : rows;
+      }),
+    ]);
     return {
-      items: items.map((u) => this.userListItem(u)),
-      nextCursor: hasMore ? items[items.length - 1]?.id : null,
+      items: rows.map((u) => this.userListItem(u)),
+      total,
+      page,
+      limit,
     };
   }
 
@@ -336,17 +345,19 @@ export class PlatformService {
         { entityId: { contains: query.search } },
       ];
     }
-    const rows = await this.prisma.auditLog.findMany({
-      where,
-      take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: { createdAt: 'desc' },
-      include: { user: { select: { email: true } } },
-    });
-    const hasMore = rows.length > query.limit;
-    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const [total, rows] = await Promise.all([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
+        where,
+        ...pageOffset(page, limit),
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { email: true } } },
+      }),
+    ]);
     return {
-      items: items.map((row) => ({
+      items: rows.map((row) => ({
         id: row.id,
         action: row.action,
         entityType: row.entityType,
@@ -357,7 +368,9 @@ export class PlatformService {
         after: row.after,
         createdAt: row.createdAt,
       })),
-      nextCursor: hasMore ? items[items.length - 1]?.id : null,
+      total,
+      page,
+      limit,
     };
   }
 

@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   keepPreviousData,
-  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -15,7 +14,6 @@ import {
   can,
 } from '@inventory/shared';
 import { api } from '@/lib/api';
-import { notifyError } from '@/lib/notify';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import { formOptional, formString } from '@/lib/form';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -31,7 +29,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { ContactTypeBadge } from '@/components/ui/status-badge';
 import { ErrorState } from '@/components/ui/error-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import {
   Dialog,
   DialogContent,
@@ -51,7 +49,7 @@ type Contact = {
   type: ContactType;
 };
 
-type ContactPage = { data: Contact[]; nextCursor: string | null };
+type ContactPage = { data: Contact[]; total: number; page: number; limit: number };
 
 export default function ContactsPage() {
   const canArchive = can(useAuthStore((s) => s.user?.membershipRole), 'contacts.delete');
@@ -59,11 +57,17 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [typeFilter, setTypeFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Contact | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, typeFilter, limit]);
 
   const purchases = useQuery({
     queryKey: ['customer-purchases', editing?.id],
@@ -80,24 +84,22 @@ export default function ContactsPage() {
     enabled: Boolean(editing?.id && editing.type === 'CUSTOMER' && open),
   });
 
-  const list = useInfiniteQuery({
-    queryKey: ['contacts', debouncedSearch, typeFilter],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  const list = useQuery({
+    queryKey: ['contacts', debouncedSearch, typeFilter, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (typeFilter) params.set('type', typeFilter);
-      if (pageParam) params.set('cursor', pageParam);
       return api<ContactPage>(`/contacts?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(
-    () => list.data?.pages.flatMap((p) => p.data) ?? [],
-    [list.data],
-  );
+  const rows = list.data?.data ?? [];
+  const total = list.data?.total ?? 0;
 
   const save = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -260,15 +262,12 @@ export default function ContactsPage() {
               )
             }
           />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => {
-              void list.fetchNextPage().then((r) => {
-                if (r.isError) notifyError('Could not load more', r.error.message);
-              });
-            }}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}

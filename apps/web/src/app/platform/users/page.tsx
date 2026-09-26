@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { downloadCsv, formatDateTime } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -15,7 +15,7 @@ import { Select } from '@/components/ui/select';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toaster';
 
@@ -38,7 +38,7 @@ type UserRow = {
   }>;
 };
 
-type Page = { items: UserRow[]; nextCursor: string | null };
+type Page = { items: UserRow[]; total: number; page: number; limit: number };
 
 const ROLE_OPTIONS = [
   { value: 'NONE', label: 'None' },
@@ -53,26 +53,33 @@ export default function PlatformUsersPage() {
   const isOwner = useAuthStore((s) => s.user?.platformRole === 'OWNER');
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [pending, setPending] = useState<UserRow | null>(null);
   const [reason, setReason] = useState('');
   const [roleChange, setRoleChange] = useState<{ user: UserRow; platformRole: PlatformRole } | null>(
     null,
   );
 
-  const list = useInfiniteQuery({
-    queryKey: ['platform', 'users', debounced],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, limit]);
+
+  const list = useQuery({
+    queryKey: ['platform', 'users', debounced, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debounced) params.set('search', debounced);
-      if (pageParam) params.set('cursor', pageParam);
       return api<Page>(`/platform/users?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
+  const rows = list.data?.items ?? [];
+  const total = list.data?.total ?? 0;
 
   const patch = useMutation({
     mutationFn: (body: { id: string; isActive?: boolean; platformRole?: PlatformRole; reason?: string }) =>
@@ -192,11 +199,12 @@ export default function PlatformUsersPage() {
       ) : (
         <>
           <SimpleTable columns={columns} data={rows} getRowKey={(u) => u.id} emptyTitle="No users" />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => void list.fetchNextPage()}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}

@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { DEFAULT_CURRENCY, PURCHASE_ORDER_STATUS_OPTIONS } from '@inventory/shared';
 import { api } from '@/lib/api';
-import { notifyError } from '@/lib/notify';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAuthStore } from '@/stores';
@@ -17,7 +16,7 @@ import { Select } from '@/components/ui/select';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { PurchaseOrderStatusBadge } from '@/components/ui/status-badge';
 import { ErrorState } from '@/components/ui/error-state';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import { TableSkeleton } from '@/components/skeletons';
 
 type PurchaseOrder = {
@@ -30,32 +29,41 @@ type PurchaseOrder = {
   contact?: { name: string } | null;
 };
 
-type PurchaseOrderPage = { data: PurchaseOrder[]; nextCursor: string | null };
+type PurchaseOrderPage = {
+  data: PurchaseOrder[];
+  total: number;
+  page: number;
+  limit: number;
+};
 
 export default function PurchaseOrdersPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const currency = useAuthStore((s) => s.user?.defaultCurrency ?? DEFAULT_CURRENCY);
 
-  const list = useInfiniteQuery({
-    queryKey: ['purchase-orders', debouncedSearch, statusFilter],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, limit]);
+
+  const list = useQuery({
+    queryKey: ['purchase-orders', debouncedSearch, statusFilter, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (statusFilter) params.set('status', statusFilter);
-      if (pageParam) params.set('cursor', pageParam);
       return api<PurchaseOrderPage>(`/purchase-orders?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(
-    () => list.data?.pages.flatMap((p) => p.data) ?? [],
-    [list.data],
-  );
+  const rows = list.data?.data ?? [];
+  const total = list.data?.total ?? 0;
 
   const columns: SimpleColumn<PurchaseOrder>[] = [
     {
@@ -159,15 +167,12 @@ export default function PurchaseOrdersPage() {
               )
             }
           />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => {
-              void list.fetchNextPage().then((r) => {
-                if (r.isError) notifyError('Could not load more', r.error.message);
-              });
-            }}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}

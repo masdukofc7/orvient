@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { downloadCsv, formatDateTime } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toaster';
 
@@ -28,30 +28,37 @@ type OrgRow = {
   memberCount: number;
 };
 
-type Page = { items: OrgRow[]; nextCursor: string | null };
+type Page = { items: OrgRow[]; total: number; page: number; limit: number };
 
 export default function PlatformOrgsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [pending, setPending] = useState<OrgRow | null>(null);
   const [reason, setReason] = useState('');
 
-  const list = useInfiniteQuery({
-    queryKey: ['platform', 'organizations', debounced],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, limit]);
+
+  const list = useQuery({
+    queryKey: ['platform', 'organizations', debounced, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debounced) params.set('search', debounced);
-      if (pageParam) params.set('cursor', pageParam);
       return api<Page>(`/platform/organizations?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
+  const rows = list.data?.items ?? [];
+  const total = list.data?.total ?? 0;
 
   const patch = useMutation({
     mutationFn: (body: { id: string; status: 'ACTIVE' | 'SUSPENDED'; reason?: string }) =>
@@ -170,11 +177,12 @@ export default function PlatformOrgsPage() {
             getRowKey={(r) => r.id}
             emptyTitle="No organizations"
           />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => void list.fetchNextPage()}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}

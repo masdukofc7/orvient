@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -10,7 +10,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 
 type AuditRow = {
   id: string;
@@ -24,7 +24,7 @@ type AuditRow = {
   createdAt: string;
 };
 
-type Page = { items: AuditRow[]; nextCursor: string | null };
+type Page = { items: AuditRow[]; total: number; page: number; limit: number };
 
 function detail(value: unknown) {
   if (!value || typeof value !== 'object') return '—';
@@ -40,21 +40,28 @@ function detail(value: unknown) {
 export default function PlatformAuditPage() {
   const [search, setSearch] = useState('');
   const debounced = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
-  const list = useInfiniteQuery({
-    queryKey: ['platform', 'audit', debounced],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, limit]);
+
+  const list = useQuery({
+    queryKey: ['platform', 'audit', debounced, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debounced) params.set('search', debounced);
-      if (pageParam) params.set('cursor', pageParam);
       return api<Page>(`/platform/audit?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
+  const rows = list.data?.items ?? [];
+  const total = list.data?.total ?? 0;
 
   const columns: SimpleColumn<AuditRow>[] = useMemo(
     () => [
@@ -82,11 +89,12 @@ export default function PlatformAuditPage() {
       ) : (
         <>
           <SimpleTable columns={columns} data={rows} getRowKey={(r) => r.id} emptyTitle="No audit events" />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => void list.fetchNextPage()}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}

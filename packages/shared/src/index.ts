@@ -13,12 +13,17 @@ export const moneySchema = z.coerce.number().finite().nonnegative();
 export const quantitySchema = z.coerce.number().finite();
 
 export const paginationQuerySchema = z.object({
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(25),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().optional(),
 });
 
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
+
+/** Offset window for Prisma skip/take. */
+export function pageOffset(page: number, limit: number) {
+  return { skip: (Math.max(1, page) - 1) * limit, take: limit };
+}
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -268,6 +273,154 @@ export const updateProductSchema = createProductSchema
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+
+/** CSV columns for product bulk create (optional cols may be blank). */
+export const PRODUCT_CSV_HEADERS = [
+  'name',
+  'sku',
+  'barcode',
+  'category',
+  'costPrice',
+  'sellingPrice',
+  'stock',
+  'lowStockAt',
+  'unit',
+  'status',
+] as const;
+
+export const PRODUCT_CSV_MAX_ROWS = 500;
+/** Per-request create batch — keeps HTTP under proxy timeouts. */
+export const PRODUCT_IMPORT_BATCH_MAX = 50;
+
+export const importProductsBatchSchema = z.object({
+  products: z.array(createProductSchema).min(1).max(PRODUCT_IMPORT_BATCH_MAX),
+});
+export type ImportProductsBatchInput = z.infer<typeof importProductsBatchSchema>;
+
+export const importProductsSchema = z.union([
+  z.object({ csv: z.string().min(1).max(2_000_000) }),
+  importProductsBatchSchema,
+]);
+export type ImportProductsInput = z.infer<typeof importProductsSchema>;
+
+/** Minimal RFC4180 split — enough for product spreadsheets. */
+export function splitCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let i = 0;
+  let inQuotes = false;
+  const s = text.replace(/^\uFEFF/, '');
+  while (i < s.length) {
+    const c = s[i]!;
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') {
+          cell += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      cell += c;
+      i += 1;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+    if (c === ',') {
+      row.push(cell);
+      cell = '';
+      i += 1;
+      continue;
+    }
+    if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i += 1;
+      row.push(cell);
+      cell = '';
+      if (row.some((x) => x.trim() !== '')) rows.push(row);
+      row = [];
+      i += 1;
+      continue;
+    }
+    cell += c;
+    i += 1;
+  }
+  row.push(cell);
+  if (row.some((x) => x.trim() !== '')) rows.push(row);
+  return rows;
+}
+
+/**
+ * Parse a product CSV into create payloads. Header row required.
+ * Throws if headers/required cols missing or row count exceeds PRODUCT_CSV_MAX_ROWS.
+ */
+export function parseProductCsv(text: string): {
+  rows: Array<{ line: number; input: CreateProductInput }>;
+  errors: Array<{ line: number; message: string }>;
+} {
+  const table = splitCsv(text);
+  if (!table.length) throw new Error('CSV is empty');
+
+  const header = table[0]!.map((h) => h.trim().toLowerCase());
+  const col = (name: string) => header.indexOf(name.toLowerCase());
+  const nameI = col('name');
+  const skuI = col('sku');
+  const costI = col('costPrice');
+  const sellI = col('sellingPrice');
+  if (nameI < 0 || skuI < 0 || costI < 0 || sellI < 0) {
+    throw new Error('CSV must include columns: name, sku, costPrice, sellingPrice');
+  }
+
+  const dataRows = table.slice(1);
+  if (dataRows.length > PRODUCT_CSV_MAX_ROWS) {
+    throw new Error(`CSV exceeds ${PRODUCT_CSV_MAX_ROWS} data rows`);
+  }
+
+  const opt = (row: string[], name: (typeof PRODUCT_CSV_HEADERS)[number]) => {
+    const i = col(name);
+    if (i < 0) return undefined;
+    const v = row[i]?.trim() ?? '';
+    return v === '' ? undefined : v;
+  };
+
+  const rows: Array<{ line: number; input: CreateProductInput }> = [];
+  const errors: Array<{ line: number; message: string }> = [];
+
+  for (let r = 0; r < dataRows.length; r++) {
+    const line = r + 2;
+    const raw = dataRows[r]!;
+    const candidate = {
+      name: raw[nameI]?.trim() ?? '',
+      sku: raw[skuI]?.trim() ?? '',
+      barcode: opt(raw, 'barcode'),
+      category: opt(raw, 'category'),
+      costPrice: raw[costI]?.trim() ?? '',
+      sellingPrice: raw[sellI]?.trim() ?? '',
+      stock: opt(raw, 'stock'),
+      lowStockAt: opt(raw, 'lowStockAt'),
+      unit: opt(raw, 'unit'),
+      status: opt(raw, 'status'),
+    };
+    const parsed = createProductSchema.safeParse(candidate);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      errors.push({
+        line,
+        message: first ? `${first.path.join('.') || 'row'}: ${first.message}` : 'Invalid row',
+      });
+      continue;
+    }
+    rows.push({ line, input: parsed.data });
+  }
+
+  return { rows, errors };
+}
 
 const contactFieldsSchema = z.object({
   name: z.string().trim().min(1).max(200),

@@ -1,15 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   keepPreviousData,
-  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { notifyError } from '@/lib/notify';
 import { Button } from '@/components/ui/button';
 import { ActionBar } from '@/components/ui/action-bar';
 import { Input } from '@/components/ui/input';
@@ -24,7 +22,7 @@ import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { InventoryTxnBadge } from '@/components/ui/status-badge';
 import { ErrorState } from '@/components/ui/error-state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/ui/toaster';
 import { TableSkeleton } from '@/components/skeletons';
 import { formatDateTime } from '@/lib/utils';
@@ -47,7 +45,7 @@ type Txn = {
 type Product = { id: string; name: string; sku: string; stock: string };
 type Contact = { id: string; name: string; phone: string | null };
 type Branch = { id: string; name: string };
-type LedgerPage = { data: Txn[]; nextCursor: string | null };
+type LedgerPage = { data: Txn[]; total: number; page: number; limit: number };
 
 export default function InventoryPage() {
   const { toast } = useToast();
@@ -65,6 +63,8 @@ export default function InventoryPage() {
   const [notes, setNotes] = useState('');
   const [toBranchId, setToBranchId] = useState('');
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   const products = useQuery({
     queryKey: ['products-pick', debouncedProductSearch],
@@ -101,23 +101,25 @@ export default function InventoryPage() {
     return map;
   }, [suppliers.data, supplierId, supplierLabel]);
 
-  const ledger = useInfiniteQuery({
-    queryKey: ['ledger', productId || 'all'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [productId, limit]);
+
+  const ledger = useQuery({
+    queryKey: ['ledger', productId || 'all', page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (productId) params.set('productId', productId);
-      if (pageParam) params.set('cursor', pageParam);
       return api<LedgerPage>(`/inventory/ledger?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(
-    () => ledger.data?.pages.flatMap((p) => p.data) ?? [],
-    [ledger.data],
-  );
+  const rows = ledger.data?.data ?? [];
+  const total = ledger.data?.total ?? 0;
 
   const mutate = useMutation({
     mutationFn: ({ path, body }: { path: string; body: unknown }) =>
@@ -391,15 +393,12 @@ export default function InventoryPage() {
                 productId ? 'No movements for this product' : 'No stock movements yet'
               }
             />
-            <LoadMoreButton
-              hasMore={Boolean(ledger.hasNextPage)}
-              isFetching={ledger.isFetchingNextPage}
-              isError={ledger.isFetchNextPageError}
-              onLoadMore={() => {
-                void ledger.fetchNextPage().then((r) => {
-                  if (r.isError) notifyError('Could not load more', r.error.message);
-                });
-              }}
+            <Pagination
+              page={page}
+              limit={limit}
+              total={total}
+              onPageChange={setPage}
+              onLimitChange={setLimit}
             />
           </>
         )}

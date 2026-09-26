@@ -13,9 +13,11 @@ import {
   createProductSchema,
   updateProductSchema,
   productListQuerySchema,
+  importProductsSchema,
   type CreateProductInput,
   type UpdateProductInput,
   type ProductListQuery,
+  type ImportProductsInput,
 } from '@inventory/shared';
 import { ProductsService } from '../application/products.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
@@ -53,6 +55,15 @@ export class ProductsController {
     @Body(new ZodValidationPipe(createProductSchema)) body: CreateProductInput,
   ) {
     return this.products.create(user.organizationId, user.userId, body, user.branchId);
+  }
+
+  @Post('import')
+  @RequirePermission('products.write')
+  importProducts(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(importProductsSchema)) body: ImportProductsInput,
+  ) {
+    return this.products.import(user.organizationId, user.userId, body, user.branchId);
   }
 
   @Post('backfill-barcodes')

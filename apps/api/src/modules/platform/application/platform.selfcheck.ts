@@ -100,8 +100,13 @@ async function selfcheck() {
     const billing = new BillingService(prisma, audit, new DodoPaymentsService(new ConfigService({})), new ConfigService({}));
     const service = new PlatformService(prisma, audit, billing);
 
-    const listed = await service.listOrganizations({ limit: 50, search: `plat-org-${suffix}` });
+    const listed = await service.listOrganizations({
+      page: 1,
+      limit: 50,
+      search: `plat-org-${suffix}`,
+    });
     assert.ok(listed.items.some((o) => o.id === org.id));
+    assert.ok(typeof listed.total === 'number');
 
     await assert.rejects(
       () => service.updateUser(regular.id, { platformRole: 'OWNER' }, support.id, 'SUPPORT'),

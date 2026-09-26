@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@inventory/database';
-import { CreateContactInput, UpdateContactInput, PaginationQuery } from '@inventory/shared';
+import {
+  CreateContactInput,
+  UpdateContactInput,
+  PaginationQuery,
+  pageOffset,
+} from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
 
@@ -60,7 +65,8 @@ export class ContactsService {
   }
 
   async list(orgId: string, query: PaginationQuery & { type?: 'CUSTOMER' | 'SUPPLIER' }) {
-    const limit = query.limit ?? 50;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
     const where: Prisma.ContactWhereInput = {
       organizationId: orgId,
       deletedAt: null,
@@ -76,15 +82,14 @@ export class ContactsService {
         : {}),
     };
 
-    const items = await this.prisma.contact.findMany({
-      where,
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    });
-
-    const hasMore = items.length > limit;
-    const data = hasMore ? items.slice(0, limit) : items;
-    return { data, nextCursor: hasMore ? data[data.length - 1]?.id : null };
+    const [total, data] = await Promise.all([
+      this.prisma.contact.count({ where }),
+      this.prisma.contact.findMany({
+        where,
+        ...pageOffset(page, limit),
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+    return { data, total, page, limit };
   }
 }

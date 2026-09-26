@@ -124,37 +124,40 @@ export class PurchaseOrdersService {
   async list(
     orgId: string,
     query: {
-      cursor?: string;
+      page?: number;
       limit?: number;
       search?: string;
       status?: 'ORDERED' | 'PARTIAL' | 'RECEIVED' | 'CANCELLED';
     },
   ) {
-    const limit = query.limit ?? 50;
-    const items = await this.prisma.purchaseOrder.findMany({
-      where: {
-        organizationId: orgId,
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.search
-          ? {
-              OR: [
-                { poNumber: { contains: query.search, mode: 'insensitive' } },
-                { contact: { name: { contains: query.search, mode: 'insensitive' } } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        contact: { select: { id: true, name: true, phone: true } },
-        _count: { select: { items: true } },
-      },
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    });
-    const hasMore = items.length > limit;
-    const data = hasMore ? items.slice(0, limit) : items;
-    return { data, nextCursor: hasMore ? data[data.length - 1]?.id : null };
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const where = {
+      organizationId: orgId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { poNumber: { contains: query.search, mode: 'insensitive' as const } },
+              { contact: { name: { contains: query.search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const [total, data] = await Promise.all([
+      this.prisma.purchaseOrder.count({ where }),
+      this.prisma.purchaseOrder.findMany({
+        where,
+        include: {
+          contact: { select: { id: true, name: true, phone: true } },
+          _count: { select: { items: true } },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+    ]);
+    return { data, total, page, limit };
   }
 
   async findOne(orgId: string, id: string) {

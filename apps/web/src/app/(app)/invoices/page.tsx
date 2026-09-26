@@ -1,15 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   DEFAULT_CURRENCY,
   INVOICE_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
 } from '@inventory/shared';
 import { api } from '@/lib/api';
-import { notifyError } from '@/lib/notify';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAuthStore } from '@/stores';
@@ -21,7 +20,7 @@ import { Select } from '@/components/ui/select';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { InvoicePaymentBadges } from '@/components/ui/status-badge';
 import { ErrorState } from '@/components/ui/error-state';
-import { LoadMoreButton } from '@/components/ui/load-more-button';
+import { Pagination } from '@/components/ui/pagination';
 import { TableSkeleton } from '@/components/skeletons';
 
 type Invoice = {
@@ -35,34 +34,38 @@ type Invoice = {
   contact?: { name: string } | null;
 };
 
-type InvoicePage = { data: Invoice[]; nextCursor: string | null };
+type InvoicePage = { data: Invoice[]; total: number; page: number; limit: number };
 
 export default function InvoicesPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const currency = useAuthStore((s) => s.user?.defaultCurrency ?? DEFAULT_CURRENCY);
 
-  const list = useInfiniteQuery({
-    queryKey: ['invoices', debouncedSearch, statusFilter, paymentFilter],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, paymentFilter, limit]);
+
+  const list = useQuery({
+    queryKey: ['invoices', debouncedSearch, statusFilter, paymentFilter, page, limit],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (statusFilter) params.set('status', statusFilter);
       if (paymentFilter) params.set('paymentStatus', paymentFilter);
-      if (pageParam) params.set('cursor', pageParam);
       return api<InvoicePage>(`/invoices?${params}`);
     },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const rows = useMemo(
-    () => list.data?.pages.flatMap((p) => p.data) ?? [],
-    [list.data],
-  );
+  const rows = list.data?.data ?? [];
+  const total = list.data?.total ?? 0;
 
   const columns: SimpleColumn<Invoice>[] = [
     {
@@ -179,15 +182,12 @@ export default function InvoicesPage() {
               )
             }
           />
-          <LoadMoreButton
-            hasMore={Boolean(list.hasNextPage)}
-            isFetching={list.isFetchingNextPage}
-            isError={list.isFetchNextPageError}
-            onLoadMore={() => {
-              void list.fetchNextPage().then((r) => {
-                if (r.isError) notifyError('Could not load more', r.error.message);
-              });
-            }}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={total}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </>
       )}
