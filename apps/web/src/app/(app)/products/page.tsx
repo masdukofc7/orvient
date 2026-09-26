@@ -55,7 +55,6 @@ type Product = {
   status: string;
   lowStockAt: string;
   category: string | null;
-  imageUrl: string | null;
 };
 
 type ProductPage = { data: Product[]; nextCursor: string | null };
@@ -419,7 +418,6 @@ export default function ProductsPage() {
                 sku: formString(fd, 'sku'),
                 barcode: formOptional(fd, 'barcode'),
                 category: formOptional(fd, 'category'),
-                imageUrl: formOptional(fd, 'imageUrl'),
                 costPrice: formNumber(fd, 'costPrice'),
                 sellingPrice: formNumber(fd, 'sellingPrice'),
                 unit: formString(fd, 'unit') || 'pcs',
@@ -436,23 +434,13 @@ export default function ProductsPage() {
             <FormField label="Name">
               <Input name="name" defaultValue={editing?.name} required />
             </FormField>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Category">
-                <Input
-                  name="category"
-                  defaultValue={editing?.category ?? ''}
-                  placeholder="Optional"
-                />
-              </FormField>
-              <FormField label="Image URL">
-                <Input
-                  name="imageUrl"
-                  type="url"
-                  defaultValue={editing?.imageUrl ?? ''}
-                  placeholder="https://…"
-                />
-              </FormField>
-            </div>
+            <FormField label="Category">
+              <Input
+                name="category"
+                defaultValue={editing?.category ?? ''}
+                placeholder="Optional"
+              />
+            </FormField>
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField label="SKU">
                 <Input name="sku" defaultValue={editing?.sku} required />

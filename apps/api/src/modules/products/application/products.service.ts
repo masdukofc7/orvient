@@ -50,7 +50,6 @@ export class ProductsService {
             barcode: resolveProductBarcode(input.barcode, input.sku),
             sku: input.sku,
             category: input.category ?? undefined,
-            imageUrl: input.imageUrl ?? undefined,
             costPrice: input.costPrice,
             sellingPrice: input.sellingPrice,
             stock: opening,

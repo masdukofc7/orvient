@@ -145,6 +145,32 @@ export default function SettingsPage() {
       toast({ title: 'Save failed', description: e.message, variant: 'destructive' }),
   });
 
+  const uploadLogo = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api<Organization>('/organizations/current/logo', { method: 'POST', body: fd });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['organization'] });
+      qc.invalidateQueries({ queryKey: ['invoice'] });
+      toast({ title: 'Logo uploaded' });
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const clearLogo = useMutation({
+    mutationFn: () => api<Organization>('/organizations/current/logo', { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['organization'] });
+      qc.invalidateQueries({ queryKey: ['invoice'] });
+      toast({ title: 'Logo removed' });
+    },
+    onError: (e: Error) =>
+      toast({ title: 'Could not remove logo', description: e.message, variant: 'destructive' }),
+  });
+
   const createBranch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       api<Branch>('/organizations/branches', { method: 'POST', body }),
@@ -245,7 +271,6 @@ export default function SettingsPage() {
                   address,
                   website: String(fd.get('website') ?? ''),
                   taxId: String(fd.get('taxId') ?? ''),
-                  logoUrl: String(fd.get('logoUrl') ?? ''),
                 });
               }}
             >
@@ -313,22 +338,37 @@ export default function SettingsPage() {
                 <FormBlock title="Branding">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormField
-                      label="Logo URL"
-                      hint="Public image URL for invoice header"
+                      label="Logo"
+                      hint="JPEG, PNG, WebP, or GIF · max 5MB · used on invoices"
                       className="sm:col-span-2"
                     >
                       <Input
-                        name="logoUrl"
-                        type="url"
-                        defaultValue={data?.logoUrl ?? ''}
-                        placeholder="https://…"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        disabled={uploadLogo.isPending}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) uploadLogo.mutate(file);
+                        }}
                       />
                     </FormField>
                     {data?.logoUrl ? (
                       <div className="flex items-center gap-3 rounded-lg border border-border p-3 sm:col-span-2">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={data.logoUrl} alt="" className="h-12 w-12 object-contain" />
-                        <span className="text-xs text-muted-foreground">Logo preview</span>
+                        <span className="flex-1 text-xs text-muted-foreground">
+                          {uploadLogo.isPending ? 'Uploading…' : 'Current logo'}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={clearLogo.isPending}
+                          onClick={() => clearLogo.mutate()}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     ) : null}
                     <FormField label="Default currency" hint="POS, invoices, reports">

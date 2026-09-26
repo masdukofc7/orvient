@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@inventory/database';
 import type {
@@ -12,6 +13,14 @@ import type {
 } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { BillingService } from '../../billing/application/billing.service';
+import {
+  buildLogoKey,
+  deleteFromR2,
+  r2Configured,
+  r2KeyFromPublicUrl,
+  sniffImageUpload,
+  uploadToR2,
+} from '../../../infrastructure/r2/r2';
 
 @Injectable()
 export class OrganizationsService {
@@ -37,12 +46,75 @@ export class OrganizationsService {
       address: emptyToNull(input.address),
       website: emptyToNull(input.website),
       taxId: emptyToNull(input.taxId),
-      logoUrl: emptyToNull(input.logoUrl),
+      logoUrl: input.logoUrl === undefined ? undefined : emptyToNull(input.logoUrl),
     };
     return this.prisma.organization.update({
       where: { id: orgId },
       data,
     });
+  }
+
+  async uploadLogo(orgId: string, body: Buffer) {
+    if (!r2Configured()) {
+      throw new ServiceUnavailableException(
+        'Logo upload is not configured (set R2_* env vars)',
+      );
+    }
+    const sniffed = sniffImageUpload(body);
+    if (!sniffed.ok) throw new BadRequestException(sniffed.error);
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { logoUrl: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const key = buildLogoKey(orgId, sniffed.ext);
+    const logoUrl = await uploadToR2({
+      key,
+      body,
+      contentType: sniffed.contentType,
+    });
+
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { logoUrl },
+    });
+
+    const oldKey = org.logoUrl ? r2KeyFromPublicUrl(org.logoUrl) : null;
+    if (oldKey?.startsWith(`orgs/${orgId}/`)) {
+      try {
+        await deleteFromR2(oldKey);
+      } catch {
+        // Best-effort cleanup; new logo already saved.
+      }
+    }
+
+    return updated;
+  }
+
+  async clearLogo(orgId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { logoUrl: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const updated = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { logoUrl: null },
+    });
+
+    const oldKey = org.logoUrl ? r2KeyFromPublicUrl(org.logoUrl) : null;
+    if (oldKey?.startsWith(`orgs/${orgId}/`) && r2Configured()) {
+      try {
+        await deleteFromR2(oldKey);
+      } catch {
+        // ignore
+      }
+    }
+
+    return updated;
   }
 
   listBranches(orgId: string) {

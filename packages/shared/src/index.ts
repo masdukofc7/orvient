@@ -262,7 +262,6 @@ export const createProductSchema = z.object({
   barcode: z.string().trim().min(1).max(64).optional().nullable(),
   sku: z.string().trim().min(1).max(64),
   category: z.string().trim().max(120).optional().nullable(),
-  imageUrl: z.string().trim().url().max(500).optional().nullable(),
   costPrice: moneySchema,
   sellingPrice: moneySchema,
   stock: z.coerce.number().finite().nonnegative().default(0),

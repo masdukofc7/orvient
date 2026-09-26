@@ -64,6 +64,7 @@ function extractErrorMessage(data: unknown, fallback: string): string {
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = options.token !== undefined ? options.token : getAccessToken();
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   let res: Response;
   try {
@@ -71,12 +72,17 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
       method: options.method ?? 'GET',
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
+        ...(isForm ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body:
+        options.body === undefined
+          ? undefined
+          : isForm
+            ? (options.body as FormData)
+            : JSON.stringify(options.body),
     });
   } catch {
     throw new ApiError('Network error — check your connection', 0, null);

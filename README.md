@@ -116,7 +116,7 @@ apps/api/src/
 | Receipts | `GET /receipts/:token` · `GET /receipts/:token/pdf` (public) |
 | POS | `POST /pos/quick-sale` |
 | Reports | `GET /reports/dashboard\|sales\|inventory\|low-stock\|export/sales` · product history · customer purchases |
-| Org | `GET/PATCH /organizations/current` · `GET/POST /organizations/branches` · `PATCH /organizations/branches/:id` |
+| Org | `GET/PATCH /organizations/current` · `POST/DELETE /organizations/current/logo` · `GET/POST /organizations/branches` · `PATCH /organizations/branches/:id` |
 | Users | `GET/POST /users` · `POST /users/invite` · `PATCH /users/:id` |
 | Billing | `GET /billing/plans` · `GET /billing/subscription` · `POST /billing/checkout` · `.../checkout/sync` · `.../manual-request` · `POST /billing/webhooks/dodo` |
 | Platform | `GET /platform/overview` · orgs/users/audit · exports · `GET/PATCH /platform/billing/requests` |
@@ -312,6 +312,7 @@ Copy `.env.example` → `.env` (`pnpm setup:env` does this). Setup also syncs co
 | `RESEND_API_KEY` / `EMAIL_FROM` | Transactional email (optional; logs if unset) |
 | `SENTRY_DSN` | Error tracking (optional) |
 | `DODO_PAYMENTS_*` / `DODO_TEST_PRODUCT_ID` | Billing checkout (optional; 503 if unset) |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Cloudflare R2 for org logo upload (optional; upload 503 if unset) |
 
 ---
 

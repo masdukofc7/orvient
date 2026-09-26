@@ -18,7 +18,6 @@ apps/web/.env.local
 apps/web/public/sw.js
 apps/web/public/workbox-*.js
 apps/web/public/sw.js.map
-apps/api/uploads
 .prisma
 packages/database/generated
 infra/cloudflared/credentials.json

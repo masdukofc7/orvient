@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import {
   createBranchSchema,
   updateBranchSchema,
@@ -12,6 +23,7 @@ import { OrganizationsService } from '../application/organizations.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
+import { MAX_LOGO_BYTES } from '../../../infrastructure/r2/r2';
 
 @ApiTags('organizations')
 @ApiBearerAuth()
@@ -31,6 +43,34 @@ export class OrganizationsController {
     @Body(new ZodValidationPipe(updateOrganizationSchema)) body: UpdateOrganizationInput,
   ) {
     return this.organizations.update(user.organizationId, body);
+  }
+
+  @Post('current/logo')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_LOGO_BYTES },
+    }),
+  )
+  uploadLogo(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.organizations.uploadLogo(user.organizationId, file?.buffer ?? Buffer.alloc(0));
+  }
+
+  @Delete('current/logo')
+  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  clearLogo(@CurrentUser() user: AuthUser) {
+    return this.organizations.clearLogo(user.organizationId);
   }
 
   @Get('branches')
