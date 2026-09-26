@@ -49,21 +49,13 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       router.replace('/login');
       return;
     }
+    // Backup UX — middleware already gates via inv_platform cookie.
     if (!user?.isPlatformAdmin) {
       router.replace('/dashboard');
     }
   }, [ready, accessToken, user?.isPlatformAdmin, router]);
 
-  // Don't flash the platform skeleton for store users — wait or redirect quietly.
-  if (!ready) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
-        Checking access…
-      </div>
-    );
-  }
-
-  if (!accessToken || !user?.isPlatformAdmin) {
+  if (!ready || !accessToken || !user?.isPlatformAdmin) {
     return null;
   }
 

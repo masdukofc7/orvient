@@ -1,4 +1,4 @@
-import { isStaffRole, isOwnerAdminRole } from '@inventory/shared';
+import { isStaffRole } from '@inventory/shared';
 import {
   LayoutDashboard,
   Package,
@@ -45,5 +45,3 @@ export function navItemsForRole(role?: string | null) {
 export function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
-
-export { isStaffRole, isOwnerAdminRole };
