@@ -16,6 +16,10 @@ export class RedisService implements OnModuleDestroy {
     }
 
     this.client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+      // Prefer explicit password — base64 secrets break redis://:pass@host URLs.
+      ...(process.env.REDIS_PASSWORD
+        ? { password: process.env.REDIS_PASSWORD }
+        : {}),
       maxRetriesPerRequest: 1,
       lazyConnect: true,
       enableOfflineQueue: false,
