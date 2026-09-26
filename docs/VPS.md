@@ -63,6 +63,8 @@ Copy credentials onto the VPS:
 ```bash
 # From the machine that ran tunnel create:
 scp ~/.cloudflared/<tunnel-uuid>.json ubuntu@<vps>:/var/www/orvient/infra/cloudflared/credentials.json
+# Container user must read it (600 → permission denied inside cloudflared):
+chmod 644 /var/www/orvient/infra/cloudflared/credentials.json
 ```
 
 Set `CLOUDFLARE_TUNNEL_ID` in `.env.production` to that UUID (deploy also reads `TunnelID` from credentials.json).
