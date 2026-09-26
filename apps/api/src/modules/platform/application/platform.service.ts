@@ -7,13 +7,15 @@ import {
 import { OrganizationStatus, PlatformRole, Prisma } from '@inventory/database';
 import {
   pageOffset,
+  csvDateTime,
+  csvYesNo,
+  humanizeEnum,
   type PaginationQuery,
   type PlatformOrgListQuery,
   type PlatformUpdateOrgInput,
   type PlatformUpdateUserInput,
   type PlatformUserListQuery,
-} from '@inventory/shared';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+} from '@inventory/shared';import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
 import { BillingService } from '../../billing/application/billing.service';
 
@@ -91,15 +93,15 @@ export class PlatformService {
       include: { _count: { select: { memberships: true } } },
     });
     const body = csv([
-      ['id', 'name', 'slug', 'status', 'statusReason', 'members', 'createdAt'],
+      ['ID', 'Name', 'Slug', 'Status', 'Status Reason', 'Members', 'Created At'],
       ...rows.map((o) => [
         o.id,
         o.name,
         o.slug,
-        o.status,
+        humanizeEnum(o.status),
         o.statusReason,
         o._count.memberships,
-        o.createdAt.toISOString(),
+        csvDateTime(o.createdAt),
       ]),
     ]);
     return { filename: 'organizations.csv', csv: body };
@@ -271,16 +273,25 @@ export class PlatformService {
       },
     });
     const body = csv([
-      ['id', 'email', 'name', 'isActive', 'platformRole', 'lastLoginAt', 'workspaces', 'createdAt'],
+      [
+        'ID',
+        'Email',
+        'Name',
+        'Active',
+        'Platform Role',
+        'Last Login',
+        'Workspaces',
+        'Created At',
+      ],
       ...rows.map((u) => [
         u.id,
         u.email,
         u.name,
-        u.isActive ? 'true' : 'false',
-        u.platformRole,
-        u.lastLoginAt?.toISOString() ?? '',
-        u.memberships.map((m) => m.organization.name).join('|'),
-        u.createdAt.toISOString(),
+        csvYesNo(u.isActive),
+        humanizeEnum(u.platformRole),
+        csvDateTime(u.lastLoginAt),
+        u.memberships.map((m) => m.organization.name).join('; '),
+        csvDateTime(u.createdAt),
       ]),
     ]);
     return { filename: 'users.csv', csv: body };

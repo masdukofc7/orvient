@@ -10,6 +10,7 @@ import { receiptPublicUrl, apiBaseUrl } from '@/lib/receipt';
 import { formatMoney } from '@/lib/utils';
 import { useActionFlash } from '@/hooks/use-action-flash';
 import { Button } from '@/components/ui/button';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/ui/form-field';
 import { PageHeader } from '@/components/ui/page-header';
@@ -188,33 +189,31 @@ function InvoiceDetailInner() {
               <Button asChild variant="outline">
                 <Link href="/invoices">Back</Link>
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => printAs('thermal')}
-                disabled={!data}
-              >
-                Print receipt
-              </Button>
-              <Button variant="outline" onClick={() => printAs('a4')} disabled={!data}>
-                Print invoice
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void downloadPdf()}
-                disabled={!data}
-                loading={pdfAction.loading}
-                success={pdfAction.success}
-              >
-                {pdfAction.success ? 'Downloaded' : 'Download PDF'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void copyLink()}
-                disabled={!data?.receiptToken}
-                success={copyAction.success}
-              >
-                {copyAction.success ? 'Copied' : 'Copy link'}
-              </Button>
+              <ActionMenu
+                label="Share"
+                items={[
+                  {
+                    label: 'Print receipt',
+                    disabled: !data,
+                    onClick: () => printAs('thermal'),
+                  },
+                  {
+                    label: 'Print invoice',
+                    disabled: !data,
+                    onClick: () => printAs('a4'),
+                  },
+                  {
+                    label: pdfAction.success ? 'Downloaded' : 'Download PDF',
+                    disabled: !data || pdfAction.loading,
+                    onClick: () => void downloadPdf(),
+                  },
+                  {
+                    label: copyAction.success ? 'Copied' : 'Copy link',
+                    disabled: !data?.receiptToken,
+                    onClick: () => void copyLink(),
+                  },
+                ]}
+              />
               {canRecordPayment ? (
                 <Button
                   variant="outline"

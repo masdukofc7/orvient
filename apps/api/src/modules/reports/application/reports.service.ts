@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@inventory/database';
+import { csvDate, csvMoney, paymentStatusLabel } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 
@@ -181,36 +182,36 @@ export class ReportsService {
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const header = [
-      'invoiceNumber',
-      'date',
-      'customer',
-      'currency',
-      'subtotal',
-      'discount',
-      'tax',
-      'grandTotal',
-      'paidAmount',
-      'paymentStatus',
+      'Invoice Number',
+      'Date',
+      'Customer',
+      'Currency',
+      'Subtotal',
+      'Discount',
+      'Tax',
+      'Grand Total',
+      'Paid Amount',
+      'Payment Status',
     ];
     const lines = [
       header.join(','),
       ...rows.map((r) =>
         [
           escape(r.invoiceNumber),
-          escape(r.finalizedAt?.toISOString().slice(0, 10) ?? ''),
-          escape(r.contact?.name ?? ''),
+          escape(csvDate(r.finalizedAt)),
+          escape(r.contact?.name ?? 'Walk-in'),
           escape(r.currency),
-          Number(r.subtotal),
-          Number(r.discount),
-          Number(r.taxAmount),
-          Number(r.grandTotal),
-          Number(r.paidAmount),
-          escape(r.paymentStatus),
+          csvMoney(r.subtotal),
+          csvMoney(r.discount),
+          csvMoney(r.taxAmount),
+          csvMoney(r.grandTotal),
+          csvMoney(r.paidAmount),
+          escape(paymentStatusLabel(r.paymentStatus)),
         ].join(','),
       ),
     ];
-    const fromLabel = from?.toISOString().slice(0, 10) ?? 'all';
-    const toLabel = to?.toISOString().slice(0, 10) ?? 'now';
+    const fromLabel = csvDate(from) || 'all';
+    const toLabel = csvDate(to) || 'now';
     return {
       filename: `sales-${fromLabel}-${toLabel}.csv`,
       csv: lines.join('\n'),

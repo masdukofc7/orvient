@@ -14,7 +14,7 @@ import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { MetricCardsSkeleton, TableSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
 import { DEFAULT_CURRENCY } from '@inventory/shared';
-import { Button } from '@/components/ui/button';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { downloadCsv } from '@/lib/csv';
 import { downloadCsv as downloadCsvText } from '@/lib/utils';
 import { useToast } from '@/components/ui/toaster';
@@ -148,61 +148,68 @@ export default function ReportsPage() {
         title="Reports"
         description="Trends, low stock, and business performance"
         actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const res = await api<{ filename: string; csv: string }>(
-                    `/reports/export/sales?from=${from}T00:00:00.000Z&to=${to}T23:59:59.999Z`,
-                  );
-                  downloadCsvText(res.filename, res.csv);
-                  toast({ title: 'Export downloaded' });
-                } catch (e) {
-                  toast({
-                    title: 'Export failed',
-                    description: e instanceof Error ? e.message : undefined,
-                    variant: 'destructive',
-                  });
-                }
-              }}
-            >
-              Export invoices CSV
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!sales.data?.byDay?.length}
-              onClick={() => {
-                const byDay = (sales.data?.byDay ?? []) as SalesDay[];
-                downloadCsv('sales-by-day.csv', [
-                  ['Day', 'Orders', 'Total'],
-                  ...byDay.map((d) => [d.day, d.count, d.total]),
-                  [],
-                  ['Summary grand total', sales.data?.summary?.grandTotal ?? 0],
-                  ['Summary orders', sales.data?.summary?.count ?? 0],
-                ]);
-              }}
-            >
-              Export sales CSV
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!lowStock.data?.length}
-              onClick={() => {
-                downloadCsv('low-stock.csv', [
-                  ['Product', 'SKU', 'Stock', 'Threshold'],
-                  ...(lowStock.data ?? []).map((p) => [
-                    p.name,
-                    p.sku,
-                    p.stock,
-                    p.lowStockAt,
-                  ]),
-                ]);
-              }}
-            >
-              Export low-stock CSV
-            </Button>
-          </>
+          <ActionMenu
+            label="Export"
+            items={[
+              {
+                label: 'Invoices CSV',
+                onClick: () => {
+                  void (async () => {
+                    try {
+                      const res = await api<{ filename: string; csv: string }>(
+                        `/reports/export/sales?from=${from}T00:00:00.000Z&to=${to}T23:59:59.999Z`,
+                      );
+                      downloadCsvText(res.filename, res.csv);
+                      toast({ title: 'Export downloaded' });
+                    } catch (e) {
+                      toast({
+                        title: 'Export failed',
+                        description: e instanceof Error ? e.message : undefined,
+                        variant: 'destructive',
+                      });
+                    }
+                  })();
+                },
+              },
+              {
+                label: 'Sales by day CSV',
+                disabled: !sales.data?.byDay?.length,
+                onClick: () => {
+                  const byDay = (sales.data?.byDay ?? []) as SalesDay[];
+                  downloadCsv('sales-by-day.csv', [
+                    ['Day', 'Orders', 'Total'],
+                    ...byDay.map((d) => [
+                      formatDate(d.day),
+                      d.count,
+                      Number(d.total).toFixed(2),
+                    ]),
+                    [],
+                    [
+                      'Summary grand total',
+                      '',
+                      Number(sales.data?.summary?.grandTotal ?? 0).toFixed(2),
+                    ],
+                    ['Summary orders', sales.data?.summary?.count ?? 0, ''],
+                  ]);
+                },
+              },
+              {
+                label: 'Low stock CSV',
+                disabled: !lowStock.data?.length,
+                onClick: () => {
+                  downloadCsv('low-stock.csv', [
+                    ['Product', 'SKU', 'Stock', 'Threshold'],
+                    ...(lowStock.data ?? []).map((p) => [
+                      p.name,
+                      p.sku,
+                      Number(p.stock).toFixed(2),
+                      Number(p.lowStockAt).toFixed(2),
+                    ]),
+                  ]);
+                },
+              },
+            ]}
+          />
         }
       />
 

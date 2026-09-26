@@ -27,6 +27,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAuthStore } from '@/stores';
 import { SimpleTable, type SimpleColumn } from '@/components/ui/simple-table';
 import { Button } from '@/components/ui/button';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { FormField } from '@/components/ui/form-field';
@@ -408,60 +409,54 @@ export default function ProductsPage() {
         actions={
           <>
             {canManage ? (
-              <>
-                <input
-                  ref={csvInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="sr-only"
-                  onChange={(e) => void onCsvPicked(e.target.files?.[0])}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    downloadCsv('products-template.csv', [
-                      [...PRODUCT_CSV_HEADERS],
-                      [
-                        'Sample Rice 25kg',
-                        'RICE-25KG',
-                        '8901001001001',
-                        'Staples',
-                        '1200',
-                        '1450',
-                        '10',
-                        '5',
-                        'bag',
-                        'ACTIVE',
-                      ],
-                    ])
-                  }
-                >
-                  CSV template
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={importBusy}
-                  loading={importBusy}
-                  onClick={() => csvInputRef.current?.click()}
-                >
-                  {importBusy ? 'Importing…' : 'Import CSV'}
-                </Button>
-                <Button
-                  variant="outline"
-                  loading={backfill.isPending}
-                  onClick={() => backfill.mutate()}
-                >
-                  {backfill.isPending ? 'Filling…' : 'Fill blank barcodes'}
-                </Button>
-              </>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                onChange={(e) => void onCsvPicked(e.target.files?.[0])}
+              />
             ) : null}
-            <Button
-              variant="outline"
-              disabled={selected.size === 0}
-              onClick={printLabels}
-            >
-              Print labels{selected.size ? ` (${selected.size})` : ''}
-            </Button>
+            {selected.size > 0 ? (
+              <Button variant="outline" onClick={printLabels}>
+                Print labels ({selected.size})
+              </Button>
+            ) : null}
+            {canManage ? (
+              <ActionMenu
+                label="More"
+                items={[
+                  {
+                    label: importBusy ? 'Importing…' : 'Import CSV',
+                    disabled: importBusy,
+                    onClick: () => csvInputRef.current?.click(),
+                  },
+                  {
+                    label: 'Download CSV template',
+                    onClick: () =>
+                      downloadCsv('products-template.csv', [
+                        [...PRODUCT_CSV_HEADERS],
+                        [
+                          'Sample Rice 25kg',
+                          'RICE-25KG',
+                          '8901001001001',
+                          'Staples',
+                          '1200',
+                          '1450',
+                          '10',
+                          '5',
+                          'bag',
+                        ],
+                      ]),
+                  },
+                  {
+                    label: backfill.isPending ? 'Filling barcodes…' : 'Fill blank barcodes',
+                    disabled: backfill.isPending,
+                    onClick: () => backfill.mutate(),
+                  },
+                ]}
+              />
+            ) : null}
             {canManage ? (
               <Button
                 onClick={() => {

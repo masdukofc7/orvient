@@ -25,6 +25,37 @@ export function pageOffset(page: number, limit: number) {
   return { skip: (Math.max(1, page) - 1) * limit, take: limit };
 }
 
+function asValidDate(value: Date | string | null | undefined): Date | null {
+  if (value == null || value === '') return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Spreadsheet-friendly date: YYYY-MM-DD (UTC). */
+export function csvDate(value: Date | string | null | undefined): string {
+  const d = asValidDate(value);
+  return d ? d.toISOString().slice(0, 10) : '';
+}
+
+/** Spreadsheet-friendly datetime: YYYY-MM-DD HH:mm (UTC). */
+export function csvDateTime(value: Date | string | null | undefined): string {
+  const d = asValidDate(value);
+  if (!d) return '';
+  const iso = d.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
+/** Fixed 2-decimal amount for CSV (no currency symbol — Excel can sum). */
+export function csvMoney(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : '';
+}
+
+export function csvYesNo(value: boolean | null | undefined): string {
+  if (value == null) return '';
+  return value ? 'Yes' : 'No';
+}
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -274,18 +305,17 @@ export const updateProductSchema = createProductSchema
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 
-/** CSV columns for product bulk create (optional cols may be blank). */
+/** Human-readable CSV columns for product bulk create (optional cols may be blank). */
 export const PRODUCT_CSV_HEADERS = [
-  'name',
-  'sku',
-  'barcode',
-  'category',
-  'costPrice',
-  'sellingPrice',
-  'stock',
-  'lowStockAt',
-  'unit',
-  'status',
+  'Name',
+  'SKU',
+  'Barcode',
+  'Category',
+  'Cost Price',
+  'Selling Price',
+  'Quantity',
+  'Low Stock At',
+  'Unit',
 ] as const;
 
 export const PRODUCT_CSV_MAX_ROWS = 500;
@@ -356,9 +386,21 @@ export function splitCsv(text: string): string[][] {
   return rows;
 }
 
+/** Resolve a header by canonical name or common aliases (spaces/underscores ignored). */
+function csvCol(header: string[], ...names: string[]) {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const lower = header.map(norm);
+  for (const name of names) {
+    const i = lower.indexOf(norm(name));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
 /**
  * Parse a product CSV into create payloads. Header row required.
  * Throws if headers/required cols missing or row count exceeds PRODUCT_CSV_MAX_ROWS.
+ * Optional columns: Barcode, Category, Quantity (alias: stock, qty), Low Stock At, Unit, Status.
  */
 export function parseProductCsv(text: string): {
   rows: Array<{ line: number; input: CreateProductInput }>;
@@ -367,14 +409,20 @@ export function parseProductCsv(text: string): {
   const table = splitCsv(text);
   if (!table.length) throw new Error('CSV is empty');
 
-  const header = table[0]!.map((h) => h.trim().toLowerCase());
-  const col = (name: string) => header.indexOf(name.toLowerCase());
-  const nameI = col('name');
-  const skuI = col('sku');
-  const costI = col('costPrice');
-  const sellI = col('sellingPrice');
+  const header = table[0]!.map((h) => h.trim());
+  const nameI = csvCol(header, 'Name');
+  const skuI = csvCol(header, 'SKU');
+  const costI = csvCol(header, 'Cost Price', 'costPrice', 'cost', 'cost_price');
+  const sellI = csvCol(
+    header,
+    'Selling Price',
+    'sellingPrice',
+    'price',
+    'sellPrice',
+    'selling_price',
+  );
   if (nameI < 0 || skuI < 0 || costI < 0 || sellI < 0) {
-    throw new Error('CSV must include columns: name, sku, costPrice, sellingPrice');
+    throw new Error('CSV must include columns: Name, SKU, Cost Price, Selling Price');
   }
 
   const dataRows = table.slice(1);
@@ -382,8 +430,14 @@ export function parseProductCsv(text: string): {
     throw new Error(`CSV exceeds ${PRODUCT_CSV_MAX_ROWS} data rows`);
   }
 
-  const opt = (row: string[], name: (typeof PRODUCT_CSV_HEADERS)[number]) => {
-    const i = col(name);
+  const barcodeI = csvCol(header, 'Barcode');
+  const categoryI = csvCol(header, 'Category');
+  const qtyI = csvCol(header, 'Quantity', 'stock', 'qty');
+  const lowI = csvCol(header, 'Low Stock At', 'lowStockAt', 'low_stock_at', 'lowstock');
+  const unitI = csvCol(header, 'Unit');
+  const statusI = csvCol(header, 'Status');
+
+  const cell = (row: string[], i: number) => {
     if (i < 0) return undefined;
     const v = row[i]?.trim() ?? '';
     return v === '' ? undefined : v;
@@ -398,14 +452,14 @@ export function parseProductCsv(text: string): {
     const candidate = {
       name: raw[nameI]?.trim() ?? '',
       sku: raw[skuI]?.trim() ?? '',
-      barcode: opt(raw, 'barcode'),
-      category: opt(raw, 'category'),
+      barcode: cell(raw, barcodeI),
+      category: cell(raw, categoryI),
       costPrice: raw[costI]?.trim() ?? '',
       sellingPrice: raw[sellI]?.trim() ?? '',
-      stock: opt(raw, 'stock'),
-      lowStockAt: opt(raw, 'lowStockAt'),
-      unit: opt(raw, 'unit'),
-      status: opt(raw, 'status'),
+      stock: cell(raw, qtyI),
+      lowStockAt: cell(raw, lowI),
+      unit: cell(raw, unitI),
+      status: cell(raw, statusI),
     };
     const parsed = createProductSchema.safeParse(candidate);
     if (!parsed.success) {

@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { PageHeader } from '@/components/ui/page-header';
 import { ReceiptSkeleton } from '@/components/skeletons';
 import { ErrorState } from '@/components/ui/error-state';
@@ -95,26 +96,26 @@ export default function PublicReceiptPage() {
               >
                 Print receipt
               </Button>
-              <Button variant="outline" onClick={() => printAs('a4')} disabled={!data}>
-                Print invoice
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void downloadPdf()}
-                disabled={!data}
-                loading={pdfAction.loading}
-                success={pdfAction.success}
-              >
-                {pdfAction.success ? 'Downloaded' : 'Download PDF'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void copyLink()}
-                disabled={!token}
-                success={copyAction.success}
-              >
-                {copyAction.success ? 'Copied' : 'Copy link'}
-              </Button>
+              <ActionMenu
+                label="More"
+                items={[
+                  {
+                    label: 'Print invoice',
+                    disabled: !data,
+                    onClick: () => printAs('a4'),
+                  },
+                  {
+                    label: pdfAction.success ? 'Downloaded' : 'Download PDF',
+                    disabled: !data || pdfAction.loading,
+                    onClick: () => void downloadPdf(),
+                  },
+                  {
+                    label: copyAction.success ? 'Copied' : 'Copy link',
+                    disabled: !token,
+                    onClick: () => void copyLink(),
+                  },
+                ]}
+              />
             </>
           }
         />
