@@ -13,7 +13,7 @@ import {
 } from '@inventory/shared';
 import { InvoicesService } from '../application/invoices.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 
 @ApiTags('invoices')
@@ -68,19 +68,19 @@ export class InvoicesController {
   }
 
   @Post(':id/void')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('invoices.void')
   void(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.invoices.void(user.organizationId, user.userId, id);
   }
 
   @Post(':id/finalize')
-  @Roles('OWNER', 'ADMIN', 'MANAGER', 'CASHIER')
+  @RequirePermission('invoices.finalize')
   finalize(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.invoices.finalizeQuote(user.organizationId, user.userId, id);
   }
 
   @Post(':id/return')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('invoices.return')
   returnSale(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,

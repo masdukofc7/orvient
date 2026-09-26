@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores';
 import { onSessionRestore, restoreSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { PageSkeleton } from '@/components/skeletons';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const NAV = [
@@ -55,12 +54,17 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
     }
   }, [ready, accessToken, user?.isPlatformAdmin, router]);
 
-  if (!ready || !accessToken || !user?.isPlatformAdmin) {
+  // Don't flash the platform skeleton for store users — wait or redirect quietly.
+  if (!ready) {
     return (
-      <div className="mx-auto min-h-dvh max-w-[1400px] px-4 py-6 sm:px-6">
-        <PageSkeleton pathname={pathname} />
+      <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
+        Checking access…
       </div>
     );
+  }
+
+  if (!accessToken || !user?.isPlatformAdmin) {
+    return null;
   }
 
   return (

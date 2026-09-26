@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import type { AuthUser } from '../decorators/current-user.decorator';
 
-/** Authorization is MembershipRole enum only — Role.permissions JSON is unused metadata. */
+/** Authorization via MembershipRole only — see @inventory/shared PERMISSION_ROLES. */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}

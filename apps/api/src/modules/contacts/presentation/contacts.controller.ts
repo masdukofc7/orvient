@@ -19,7 +19,7 @@ import {
 } from '@inventory/shared';
 import { ContactsService } from '../application/contacts.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 
 @ApiTags('contacts')
@@ -59,7 +59,7 @@ export class ContactsController {
   }
 
   @Delete(':id')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('contacts.delete')
   remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.contacts.softDelete(user.organizationId, user.userId, id);
   }

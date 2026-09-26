@@ -18,7 +18,7 @@ import {
   type BillingManualRequestInput,
 } from '@inventory/shared';
 import { Public } from '../../../common/decorators/public.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { BillingService } from '../application/billing.service';
@@ -41,7 +41,7 @@ export class BillingController {
   }
 
   @ApiBearerAuth()
-  @Roles('OWNER', 'ADMIN')
+  @RequirePermission('billing.manage')
   @Post('checkout')
   checkout(
     @CurrentUser() user: AuthUser,
@@ -55,7 +55,7 @@ export class BillingController {
   }
 
   @ApiBearerAuth()
-  @Roles('OWNER', 'ADMIN')
+  @RequirePermission('billing.manage')
   @Post('checkout/sync')
   syncCheckout(
     @CurrentUser() user: AuthUser,
@@ -65,7 +65,7 @@ export class BillingController {
   }
 
   @ApiBearerAuth()
-  @Roles('OWNER', 'ADMIN')
+  @RequirePermission('billing.manage')
   @Post('manual-request')
   manualRequest(
     @CurrentUser() user: AuthUser,

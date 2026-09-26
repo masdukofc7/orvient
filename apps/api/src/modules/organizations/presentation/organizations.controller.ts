@@ -21,7 +21,7 @@ import {
 } from '@inventory/shared';
 import { OrganizationsService } from '../application/organizations.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { MAX_LOGO_BYTES } from '../../../infrastructure/r2/r2';
 
@@ -37,7 +37,7 @@ export class OrganizationsController {
   }
 
   @Patch('current')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('org.update')
   update(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(updateOrganizationSchema)) body: UpdateOrganizationInput,
@@ -46,7 +46,7 @@ export class OrganizationsController {
   }
 
   @Post('current/logo')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('org.logo')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -68,7 +68,7 @@ export class OrganizationsController {
   }
 
   @Delete('current/logo')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('org.logo')
   clearLogo(@CurrentUser() user: AuthUser) {
     return this.organizations.clearLogo(user.organizationId);
   }
@@ -79,7 +79,7 @@ export class OrganizationsController {
   }
 
   @Post('branches')
-  @Roles('OWNER', 'ADMIN')
+  @RequirePermission('branches.manage')
   createBranch(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createBranchSchema)) body: CreateBranchInput,
@@ -88,7 +88,7 @@ export class OrganizationsController {
   }
 
   @Patch('branches/:id')
-  @Roles('OWNER', 'ADMIN')
+  @RequirePermission('branches.manage')
   updateBranch(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,

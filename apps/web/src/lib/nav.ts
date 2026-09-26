@@ -20,7 +20,7 @@ export type NavItem = {
   shortLabel?: string;
   /** Show in mobile bottom bar */
   primary?: boolean;
-  /** Hide from cashiers when true */
+  /** Hide from cashiers when true — maps to inventory.manage / staff bundle */
   staffOnly?: boolean;
 };
 

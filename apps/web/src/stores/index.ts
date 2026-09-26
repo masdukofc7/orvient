@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionUser } from '@inventory/shared';
-import { setAccessToken, setSessionFlag, setLastOrganizationId } from '@/lib/auth-token';
+import { isOwnerAdminRole, isStaffRole } from '@inventory/shared';
+import { setAccessToken, setSessionFlag, setAuthHintFlags, setLastOrganizationId } from '@/lib/auth-token';
 
 export type PosLine = {
   key: string;
@@ -176,6 +177,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   setSession: (accessToken, user) => {
     setAccessToken(accessToken);
     setSessionFlag(true);
+    setAuthHintFlags({
+      platform: Boolean(user.isPlatformAdmin),
+      staff: isStaffRole(user.membershipRole),
+      ownerAdmin: isOwnerAdminRole(user.membershipRole),
+    });
     setLastOrganizationId(user.organizationId);
     applyBrandColor(user);
     set({ accessToken, user });
@@ -183,6 +189,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearSession: () => {
     setAccessToken(null);
     setSessionFlag(false);
+    setAuthHintFlags(null);
     setLastOrganizationId(null);
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('accessToken');

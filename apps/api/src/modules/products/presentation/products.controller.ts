@@ -19,7 +19,7 @@ import {
 } from '@inventory/shared';
 import { ProductsService } from '../application/products.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 
 @ApiTags('products')
@@ -47,7 +47,7 @@ export class ProductsController {
   }
 
   @Post()
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('products.write')
   create(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createProductSchema)) body: CreateProductInput,
@@ -56,13 +56,13 @@ export class ProductsController {
   }
 
   @Post('backfill-barcodes')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('products.write')
   backfillBarcodes(@CurrentUser() user: AuthUser) {
     return this.products.backfillBarcodes(user.organizationId, user.userId);
   }
 
   @Patch(':id')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('products.write')
   update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -72,7 +72,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('products.write')
   remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.products.softDelete(user.organizationId, user.userId, id);
   }

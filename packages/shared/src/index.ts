@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export * from './options';
+export * from './rbac';
 
 export const currencyCodeSchema = z
   .string()
@@ -191,16 +192,6 @@ export type JwtAuthUser = {
   isPlatformAdmin?: boolean;
   platformRole?: 'NONE' | 'SUPPORT' | 'OWNER';
 };
-
-export type MembershipRoleName = 'OWNER' | 'ADMIN' | 'MANAGER' | 'CASHIER';
-
-export function isStaffRole(role?: string | null) {
-  return role === 'OWNER' || role === 'ADMIN' || role === 'MANAGER';
-}
-
-export function isOwnerAdminRole(role?: string | null) {
-  return role === 'OWNER' || role === 'ADMIN';
-}
 
 export const organizationStatusSchema = z.enum(['ACTIVE', 'SUSPENDED']);
 

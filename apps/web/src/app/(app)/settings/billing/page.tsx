@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Check } from 'lucide-react';
-import { isOwnerAdminRole } from '@inventory/shared';
+import { can } from '@inventory/shared';
 import { api } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
 import { clearSignupIntent, getSignupIntent } from '@/lib/signup-intent';
@@ -62,7 +62,7 @@ function BillingSettingsInner() {
   const qc = useQueryClient();
   const search = useSearchParams();
   const user = useAuthStore((s) => s.user);
-  const canPay = isOwnerAdminRole(user?.membershipRole);
+  const canPay = can(user?.membershipRole, 'billing.manage');
   const [planId, setPlanId] = useState('');
   const [cycle, setCycle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [method, setMethod] = useState('');

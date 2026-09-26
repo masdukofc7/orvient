@@ -1,5 +1,5 @@
 import type { SessionUser } from '@inventory/shared';
-import { getAccessToken, setAccessToken, setSessionFlag, getLastOrganizationId, setLastOrganizationId } from './auth-token';
+import { getAccessToken, setAccessToken, setSessionFlag, setAuthHintFlags, getLastOrganizationId, setLastOrganizationId } from './auth-token';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -31,6 +31,7 @@ export function onSessionRestore(handler: SessionHandler | null) {
 function clearClientSession() {
   setAccessToken(null);
   setSessionFlag(false);
+  setAuthHintFlags(null);
   setLastOrganizationId(null);
   if (typeof window === 'undefined') return;
   localStorage.removeItem('accessToken');

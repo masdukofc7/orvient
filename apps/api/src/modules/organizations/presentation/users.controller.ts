@@ -10,12 +10,12 @@ import {
 } from '@inventory/shared';
 import { UsersService } from '../application/users.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 
 @ApiTags('users')
 @ApiBearerAuth()
-@Roles('OWNER', 'ADMIN')
+@RequirePermission('team.manage')
 @Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -47,6 +47,12 @@ export class UsersController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updateOrgUserSchema)) body: UpdateOrgUserInput,
   ) {
-    return this.users.update(user.organizationId, user.userId, id, body);
+    return this.users.update(
+      user.organizationId,
+      user.userId,
+      user.membershipRole,
+      id,
+      body,
+    );
   }
 }

@@ -64,6 +64,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user?.isActive) throw new UnauthorizedException('User inactive');
 
     if (!skipOrg) {
+      const membership = await this.prisma.membership.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: payload.sub,
+            organizationId: payload.organizationId,
+          },
+        },
+        select: { isActive: true },
+      });
+      if (!membership?.isActive) {
+        throw new UnauthorizedException('Membership inactive');
+      }
+
       const org = await this.prisma.organization.findUnique({
         where: { id: payload.organizationId },
         select: { status: true },

@@ -10,13 +10,13 @@ import {
 } from '@inventory/shared';
 import { PurchaseOrdersService } from '../application/purchase-orders.service';
 import { CurrentUser, AuthUser } from '../../../common/decorators/current-user.decorator';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 
 @ApiTags('purchase-orders')
 @ApiBearerAuth()
 @Controller('purchase-orders')
-@Roles('OWNER', 'ADMIN', 'MANAGER')
+@RequirePermission('purchase_orders.manage')
 export class PurchaseOrdersController {
   constructor(private readonly purchaseOrders: PurchaseOrdersService) {}
 

@@ -354,7 +354,7 @@ export class AuthService {
     await this.clearAuthFails(email, meta?.ip);
 
     const active = user.memberships.filter(
-      (m) => m.organization.status === OrganizationStatus.ACTIVE,
+      (m) => m.isActive && m.organization.status === OrganizationStatus.ACTIVE,
     );
     if (!active.length) {
       throw new ForbiddenException('User has no active organization membership');
@@ -404,7 +404,9 @@ export class AuthService {
       },
       include: { organization: true },
     });
-    if (!membership) throw new ForbiddenException('Not a member of that organization');
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenException('Not a member of that organization');
+    }
 
     // Revoke existing refresh tokens so old-org sessions die on refresh
     await this.prisma.refreshToken.updateMany({
@@ -441,7 +443,9 @@ export class AuthService {
       where: { userId_organizationId: { userId, organizationId } },
       include: { organization: true },
     });
-    if (!membership) throw new ForbiddenException('Not a member of that organization');
+    if (!membership || !membership.isActive) {
+      throw new ForbiddenException('Not a member of that organization');
+    }
 
     const branch = await this.prisma.branch.findFirst({
       where: { id: input.branchId, organizationId },
@@ -471,6 +475,7 @@ export class AuthService {
     const memberships = await this.prisma.membership.findMany({
       where: {
         userId,
+        isActive: true,
         organization: { status: OrganizationStatus.ACTIVE },
       },
       include: { organization: true },
@@ -503,7 +508,7 @@ export class AuthService {
     if (!user.isActive) throw new UnauthorizedException('User inactive');
 
     const active = user.memberships.filter(
-      (m) => m.organization.status === OrganizationStatus.ACTIVE,
+      (m) => m.isActive && m.organization.status === OrganizationStatus.ACTIVE,
     );
     const membership = preferredOrgId
       ? active.find((m) => m.organizationId === preferredOrgId)
@@ -561,7 +566,7 @@ export class AuthService {
         userId_organizationId: { userId, organizationId },
       },
     });
-    if (!membership) throw new ForbiddenException('No membership');
+    if (!membership || !membership.isActive) throw new ForbiddenException('No membership');
 
     let branchId = preferredBranchId ?? null;
     if (branchId) {

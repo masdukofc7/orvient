@@ -12,7 +12,7 @@ import {
   DEFAULT_CURRENCY,
   PRODUCT_STATUS_OPTIONS,
   PRODUCT_UNIT_OPTIONS,
-  isStaffRole,
+  can,
 } from '@inventory/shared';
 import { api } from '@/lib/api';
 import { notifyError } from '@/lib/notify';
@@ -61,7 +61,7 @@ type ProductPage = { data: Product[]; nextCursor: string | null };
 
 export default function ProductsPage() {
   const currency = useAuthStore((s) => s.user?.defaultCurrency ?? DEFAULT_CURRENCY);
-  const canManage = isStaffRole(useAuthStore((s) => s.user?.membershipRole));
+  const canManage = can(useAuthStore((s) => s.user?.membershipRole), 'products.write');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');

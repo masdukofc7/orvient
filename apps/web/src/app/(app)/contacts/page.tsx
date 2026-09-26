@@ -12,7 +12,7 @@ import {
   CONTACT_TYPE_OPTIONS,
   DEFAULT_CURRENCY,
   type ContactType,
-  isStaffRole,
+  can,
 } from '@inventory/shared';
 import { api } from '@/lib/api';
 import { notifyError } from '@/lib/notify';
@@ -54,7 +54,7 @@ type Contact = {
 type ContactPage = { data: Contact[]; nextCursor: string | null };
 
 export default function ContactsPage() {
-  const canArchive = isStaffRole(useAuthStore((s) => s.user?.membershipRole));
+  const canArchive = can(useAuthStore((s) => s.user?.membershipRole), 'contacts.delete');
   const currency = useAuthStore((s) => s.user?.defaultCurrency ?? DEFAULT_CURRENCY);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);

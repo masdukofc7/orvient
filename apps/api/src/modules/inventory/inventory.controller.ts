@@ -10,7 +10,7 @@ import {
 import { z } from 'zod';
 import { InventoryService } from './inventory.service';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 type StockMutation = z.infer<typeof stockMutationSchema>;
@@ -24,7 +24,7 @@ export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
 
   @Post('stock-in')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('inventory.manage')
   stockIn(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(stockMutationSchema)) body: StockMutation,
@@ -33,7 +33,7 @@ export class InventoryController {
   }
 
   @Post('stock-out')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('inventory.manage')
   stockOut(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(stockOutSchema)) body: StockOut,
@@ -42,7 +42,7 @@ export class InventoryController {
   }
 
   @Post('adjust')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('inventory.manage')
   adjust(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(stockAdjustSchema)) body: StockAdjust,
@@ -51,7 +51,7 @@ export class InventoryController {
   }
 
   @Post('transfer')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('inventory.manage')
   transfer(
     @CurrentUser() user: AuthUser,
     @Body(
@@ -77,7 +77,7 @@ export class InventoryController {
   }
 
   @Get('ledger')
-  @Roles('OWNER', 'ADMIN', 'MANAGER')
+  @RequirePermission('inventory.manage')
   ledger(
     @CurrentUser() user: AuthUser,
     @Query(new ZodValidationPipe(ledgerQuerySchema)) query: LedgerQuery,
@@ -86,6 +86,7 @@ export class InventoryController {
   }
 
   @Get('history/:productId')
+  @RequirePermission('inventory.manage')
   history(@CurrentUser() user: AuthUser, @Param('productId') productId: string) {
     return this.inventory.history(user.organizationId, productId);
   }

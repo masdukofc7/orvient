@@ -6,7 +6,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DEFAULT_CURRENCY,
   ensureCurrencyOption,
-  isOwnerAdminRole,
+  can,
+  isOwnerRole,
 } from '@inventory/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -104,7 +105,12 @@ export default function SettingsPage() {
   const setSession = useAuthStore((s) => s.setSession);
   const accessToken = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
-  const canManageTeam = isOwnerAdminRole(user?.membershipRole);
+  const canManageTeam = can(user?.membershipRole, 'team.manage');
+  const canEditOrg = can(user?.membershipRole, 'org.update');
+  const canGrantOwner = isOwnerRole(user?.membershipRole);
+  const roleSelectOptions = canGrantOwner
+    ? [{ value: 'OWNER', label: 'Owner' }, ...ROLE_OPTIONS]
+    : ROLE_OPTIONS;
   const [inviteOpen, setInviteOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
 
@@ -228,9 +234,11 @@ export default function SettingsPage() {
         title="Settings"
         description="Company details, branches, and team for this workspace"
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/settings/billing">Billing</Link>
-          </Button>
+          canManageTeam ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/billing">Billing</Link>
+            </Button>
+          ) : undefined
         }
       />
 
@@ -246,6 +254,7 @@ export default function SettingsPage() {
               className="space-y-8"
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditOrg) return;
                 const fd = new FormData(e.currentTarget);
                 const email = String(fd.get('email') ?? '').trim();
                 const phone = String(fd.get('phone') ?? '').trim();
@@ -274,6 +283,7 @@ export default function SettingsPage() {
                 });
               }}
             >
+              <fieldset disabled={!canEditOrg} className="min-w-0 space-y-8 border-0 p-0">
               <FormBlock title="Business">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Company name" className="sm:col-span-2">
@@ -391,17 +401,21 @@ export default function SettingsPage() {
                 </FormBlock>
               </div>
 
-              <div className="space-y-4 border-t border-border pt-8">
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                  POS prints an 80mm thermal receipt. Invoices also support A4 print and PDF. Set a
-                  thermal printer as the system default for fastest checkout.
+              </fieldset>
+
+              {canEditOrg ? (
+                <div className="space-y-4 border-t border-border pt-8">
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                    POS prints an 80mm thermal receipt. Invoices also support A4 print and PDF. Set a
+                    thermal printer as the system default for fastest checkout.
+                  </div>
+                  <ActionBar>
+                    <Button loading={save.isPending}>
+                      {save.isPending ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  </ActionBar>
                 </div>
-                <ActionBar>
-                  <Button loading={save.isPending}>
-                    {save.isPending ? 'Saving…' : 'Save changes'}
-                  </Button>
-                </ActionBar>
-              </div>
+              ) : null}
             </form>
           )}
         </CardBody>
@@ -529,14 +543,22 @@ export default function SettingsPage() {
                         className="w-full sm:w-36"
                         containerClassName="w-full sm:w-36"
                         value={u.membershipRole}
-                        disabled={u.userId === user?.id || patchUser.isPending}
+                        disabled={
+                          u.userId === user?.id ||
+                          patchUser.isPending ||
+                          (!canGrantOwner && u.membershipRole === 'OWNER')
+                        }
                         onChange={(e) =>
                           patchUser.mutate({
                             id: u.userId,
                             body: { membershipRole: e.target.value },
                           })
                         }
-                        options={[{ value: 'OWNER', label: 'Owner' }, ...ROLE_OPTIONS]}
+                        options={
+                          u.membershipRole === 'OWNER' && !canGrantOwner
+                            ? [{ value: 'OWNER', label: 'Owner' }, ...ROLE_OPTIONS]
+                            : roleSelectOptions
+                        }
                       />
                       {u.userId !== user?.id ? (
                         <Button

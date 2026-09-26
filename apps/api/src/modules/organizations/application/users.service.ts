@@ -1,16 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { AuthTokenType, MembershipRole, Prisma } from '@inventory/database';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'crypto';
-import type {
-  CreateOrgUserInput,
-  InviteOrgUserInput,
-  UpdateOrgUserInput,
+import {
+  isOwnerRole,
+  type CreateOrgUserInput,
+  type InviteOrgUserInput,
+  type UpdateOrgUserInput,
 } from '@inventory/shared';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../../../common/services/audit.service';
@@ -43,7 +45,7 @@ export class UsersService {
       userId: m.user.id,
       email: m.user.email,
       name: m.user.name,
-      isActive: m.user.isActive,
+      isActive: m.isActive && m.user.isActive,
       membershipRole: m.role,
     }));
   }
@@ -99,7 +101,7 @@ export class UsersService {
         userId: result.user.id,
         email: result.user.email,
         name: result.user.name,
-        isActive: result.user.isActive,
+        isActive: result.membership.isActive && result.user.isActive,
         membershipRole: result.membership.role,
       };
     } catch (e) {
@@ -176,22 +178,40 @@ export class UsersService {
       userId: result.user.id,
       email: result.user.email,
       name: result.user.name,
-      isActive: result.user.isActive,
+      isActive: result.membership.isActive && result.user.isActive,
       membershipRole: result.membership.role,
       invited: true,
     };
   }
 
-  async update(orgId: string, actorId: string, userId: string, input: UpdateOrgUserInput) {
+  async update(
+    orgId: string,
+    actorId: string,
+    actorRole: string,
+    userId: string,
+    input: UpdateOrgUserInput,
+  ) {
     const membership = await this.prisma.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: orgId } },
       include: { user: true },
     });
     if (!membership) throw new NotFoundException('User not found in organization');
 
+    if (input.membershipRole === 'OWNER' && !isOwnerRole(actorRole)) {
+      throw new ForbiddenException('Only an owner can grant owner');
+    }
+    if (
+      membership.role === 'OWNER' &&
+      input.membershipRole &&
+      input.membershipRole !== 'OWNER' &&
+      !isOwnerRole(actorRole)
+    ) {
+      throw new ForbiddenException('Only an owner can demote an owner');
+    }
+
     if (input.membershipRole && input.membershipRole !== 'OWNER' && membership.role === 'OWNER') {
       const owners = await this.prisma.membership.count({
-        where: { organizationId: orgId, role: 'OWNER' },
+        where: { organizationId: orgId, role: 'OWNER', isActive: true },
       });
       if (owners <= 1) {
         throw new BadRequestException('Cannot demote the last owner');
@@ -200,52 +220,45 @@ export class UsersService {
 
     if (input.isActive === false && membership.role === 'OWNER') {
       const owners = await this.prisma.membership.count({
-        where: { organizationId: orgId, role: 'OWNER', user: { isActive: true } },
+        where: {
+          organizationId: orgId,
+          role: 'OWNER',
+          isActive: true,
+          user: { isActive: true },
+        },
       });
       if (owners <= 1) {
         throw new BadRequestException('Cannot deactivate the last owner');
       }
     }
 
-    const updatedUser = await this.prisma.$transaction(async (tx) => {
-      if (input.membershipRole) {
-        await tx.membership.update({
-          where: { id: membership.id },
-          data: { role: input.membershipRole as MembershipRole },
-        });
-      }
-      if (input.isActive !== undefined) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { isActive: input.isActive },
-        });
-      }
-      return tx.user.findUniqueOrThrow({
-        where: { id: userId },
-        include: {
-          memberships: { where: { organizationId: orgId }, take: 1 },
-        },
-      });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const data: { role?: MembershipRole; isActive?: boolean } = {};
+      if (input.membershipRole) data.role = input.membershipRole as MembershipRole;
+      if (input.isActive !== undefined) data.isActive = input.isActive;
+      const next = Object.keys(data).length
+        ? await tx.membership.update({ where: { id: membership.id }, data })
+        : membership;
+      return next;
     });
 
-    const role = updatedUser.memberships[0]?.role ?? membership.role;
     await this.audit.log({
       organizationId: orgId,
       userId: actorId,
       action: 'user.update',
       entityType: 'User',
       entityId: userId,
-      before: { membershipRole: membership.role, isActive: membership.user.isActive },
-      after: { membershipRole: role, isActive: updatedUser.isActive },
+      before: { membershipRole: membership.role, isActive: membership.isActive },
+      after: { membershipRole: updated.role, isActive: updated.isActive },
     });
 
     return {
       membershipId: membership.id,
-      userId: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      isActive: updatedUser.isActive,
-      membershipRole: role,
+      userId: membership.user.id,
+      email: membership.user.email,
+      name: membership.user.name,
+      isActive: updated.isActive && membership.user.isActive,
+      membershipRole: updated.role,
     };
   }
 }

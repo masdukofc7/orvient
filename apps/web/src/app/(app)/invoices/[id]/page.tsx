@@ -28,7 +28,7 @@ import {
 import { ErrorState } from '@/components/ui/error-state';
 import { ReceiptDocument, type ReceiptData } from '@/components/receipt/receipt-document';
 import { usePrintLayout, parsePrintQuery } from '@/hooks/use-print-layout';
-import { isStaffRole, DEFAULT_CURRENCY } from '@inventory/shared';
+import { can, DEFAULT_CURRENCY } from '@inventory/shared';
 import { useAuthStore } from '@/stores';
 
 function InvoiceDetailInner() {
@@ -41,7 +41,7 @@ function InvoiceDetailInner() {
   const [returnQty, setReturnQty] = useState<Record<string, string>>({});
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const canVoid = isStaffRole(useAuthStore((s) => s.user?.membershipRole));
+  const canVoid = can(useAuthStore((s) => s.user?.membershipRole), 'invoices.void');
   const pdfAction = useActionFlash();
   const copyAction = useActionFlash();
 
